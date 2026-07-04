@@ -199,8 +199,13 @@ function successBeep(){
     "&callback=handleResult";
 
   let script = document.createElement("script");
-  script.src = url;
-  document.body.appendChild(script);
+script.src = url + "&t=" + Date.now();
+
+script.onload = function () {
+    script.remove();
+};
+
+document.body.appendChild(script);
 }
 
 function handleResult(result){
