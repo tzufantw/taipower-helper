@@ -1,0 +1,9 @@
+{
+  "name": "台電換表助手 Team V1",
+  "short_name": "換表助手",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "theme_color": "#0f766e",
+  "background_color": "#edf3f8",
+  "icons": []
+}

@@ -1,312 +1,80 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
+<!doctype html>
+<html lang="zh-Hant">
 <head>
-
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<title>台電換表助手 V5</title>
-
-<script src="https://unpkg.com/html5-qrcode"></script>
-<style>
-
-body{
-    margin:0;
-    background:#f5f5f5;
-    font-family:Arial,"Microsoft JhengHei";
-}
-
-.container{
-    max-width:700px;
-    margin:auto;
-    padding:15px;
-}
-
-h1{
-    color:#0066cc;
-}
-
-.card{
-    background:white;
-    padding:15px;
-    border-radius:12px;
-    margin-top:15px;
-}
-
-button{
-
-    width:100%;
-    padding:16px;
-
-    font-size:24px;
-
-    border:none;
-
-    border-radius:10px;
-
-    margin-top:12px;
-
-    background:#ffcc00;
-
-    font-weight:bold;
-
-}
-
-input{
-
-    width:100%;
-
-    padding:14px;
-
-    font-size:22px;
-
-    box-sizing:border-box;
-
-}
-
-.ok{
-
-    color:green;
-
-    font-size:22px;
-
-    font-weight:bold;
-
-}
-
-.err{
-
-    color:red;
-
-    font-size:22px;
-
-    font-weight:bold;
-
-}
-
-#reader{
-
-    width:100%;
-
-}
-
-.count{
-
-    color:#0066cc;
-
-    font-size:28px;
-
-    font-weight:bold;
-
-}
-
-</style>
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>台電換表助手 Team V1</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/html5-qrcode" defer></script>
 </head>
-
 <body>
+<header>
+  <h1>台電換表助手 Team V1</h1>
+  <div id="net">未登入</div>
+</header>
 
-<div class="container">
-  <h1>台電換表助手 V5</h1>
+<main>
+  <section id="loginCard" class="card">
+    <h2>工程師登入</h2>
+    <input id="username" placeholder="帳號，例如 A001">
+    <input id="password" type="password" placeholder="密碼">
+    <button id="loginBtn">登入</button>
+    <p class="hint">帳號 A001～A010，密碼預設 1234。</p>
+  </section>
 
-<div class="card">
-今日已掃：
-<span id="count" class="count">0</span> 筆
-</div>
+  <section id="appCard" class="hidden">
+    <section class="card">
+      <div class="top">
+        <div>
+          <b>工程師：</b><span id="engineerName"></span><br>
+          <b>今日已掃：</b><span id="todayCount">0</span> 筆
+        </div>
+        <button class="gray small" id="logoutBtn">登出</button>
+      </div>
+    </section>
 
-<div class="card">
+    <section class="card">
+      <h2>掃描新電表 QR Code</h2>
+      <div id="reader"></div>
+      <div class="grid2">
+        <button id="startBtn">啟用相機掃描</button>
+        <button class="gray" id="stopBtn">停止掃描</button>
+      </div>
 
-<button onclick="startScan()">
-📷 啟用相機掃描
-</button>
+      <label>QR 原始內容</label>
+      <textarea id="qrRaw" rows="3" placeholder="掃描後自動帶入，也可手動貼上"></textarea>
 
-<button onclick="stopScan()">
-停止掃描
-</button>
+      <div class="grid2">
+        <button class="gray" id="parseBtn">解析 QR</button>
+        <button class="red" id="clearFormBtn">清空欄位</button>
+      </div>
 
-<div id="reader"></div>
+      <label>新電表號碼</label>
+      <input id="meterNo" placeholder="例如 1010111">
 
-</div>
+      <label>檢驗 / 檢定號碼</label>
+      <input id="verifyNo" placeholder="例如 111612">
 
-<div class="card">
+      <label>備註</label>
+      <input id="note" placeholder="可空白">
 
-<input
-id="qr"
-placeholder="相機不能用時，可手動貼上 QR 內容">
+      <button id="uploadBtn">上傳到 Excel / Google 試算表</button>
+      <p class="hint">成功上傳後會自動清空欄位，準備掃下一顆電錶。</p>
+    </section>
 
-<button onclick="saveQR()">
-手動存入 Google 試算表
-</button>
+    <section class="card">
+      <h2>本機紀錄</h2>
+      <div class="grid2">
+        <button class="gray" id="exportCsvBtn">匯出 CSV</button>
+        <button class="red" id="clearLocalBtn">清除本機紀錄</button>
+      </div>
+      <div id="localList"></div>
+    </section>
+  </section>
+</main>
 
-</div>
-
-<div id="msg"></div>
-
-<script>
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbweTDMj42XbiCEUlHyrHXSzHES6aOI5W5Dj-6ZlxdRDtJhb37aiGroVb6MquuZUyGAAuA/exec";
-
-let html5QrCode = null;
-let lastRaw = "";
-let lastTime = 0;
-let count = 0;
-let isSaving = false;
-
-function parseQR(raw){
-  raw = raw.trim();
-
-  let text = raw.replace(/^Lola/i,"");
-  let parts = text.split(";");
-
-  if(parts.length !== 2){
-    return null;
-  }
-
-  return {
-    checkCode: parts[0].trim(),
-    meterCode: parts[1].trim(),
-    raw: raw
-  };
-}
-
-function showMessage(html){
-  document.getElementById("msg").innerHTML = html;
-}
-
-function successBeep(){
-  if(navigator.vibrate){
-    navigator.vibrate(150);
-  }
-}
-  function saveParsed(data){
-  if(isSaving) return;
-
-  let now = Date.now();
-
-  if(data.raw === lastRaw && now - lastTime < 3000){
-    return;
-  }
-
-  isSaving = true;
-  lastRaw = data.raw;
-  lastTime = now;
-
-  showMessage('<div>寫入中，請稍候...</div>');
-
-  let url =
-    GAS_URL +
-    "?raw=" +
-    encodeURIComponent(data.raw) +
-    "&callback=handleResult";
-
-  let script = document.createElement("script");
-script.src = url + "&t=" + Date.now();
-
-script.onload = function () {
-    script.remove();
-};
-
-document.body.appendChild(script);
-}
-
-function handleResult(result){
-  isSaving = false;
-
-  if(result.status === "ok"){
-    count++;
-    document.getElementById("count").innerText = count;
-
-    showMessage(
-      '<div class="ok">✅ 已存入 Google 試算表<br><br>' +
-      '檢驗碼：' + result.checkCode + '<br>' +
-      '電錶號碼：' + result.meterCode +
-      '</div>'
-    );
-
-    document.getElementById("qr").value = "";
-    successBeep();
-  }else{
-    showMessage(
-      '<div class="err">寫入失敗：' + result.message + '</div>'
-    );
-  }
-}
-
-function saveQR(){
-  let raw = document.getElementById("qr").value.trim();
-
-  if(raw === ""){
-    showMessage('<div class="err">請先輸入 QR 內容</div>');
-    return;
-  }
-
-  let data = parseQR(raw);
-
-  if(!data){
-    showMessage('<div class="err">格式錯誤，範例：Lola15072088;11075245</div>');
-    return;
-  }
-
-  saveParsed(data);
-}
-  function startScan(){
-
-    if(html5QrCode){
-        html5QrCode.stop().catch(()=>{});
-    }
-
-    html5QrCode = new Html5Qrcode("reader");
-
-    html5QrCode.start(
-
-        { facingMode:"environment" },
-
-        {
-            fps:10,
-            qrbox:250
-        },
-
-        function(decodedText){
-
-            let data = parseQR(decodedText);
-
-            if(!data){
-                return;
-            }
-
-            saveParsed(data);
-
-        },
-
-        function(error){}
-
-    ).then(function(){
-
-        showMessage("<div class='ok'>相機已啟動，請對準 QR Code</div>");
-
-    }).catch(function(err){
-
-        showMessage("<div class='err'>相機啟動失敗：" + err + "</div>");
-
-    });
-
-}
-
-function stopScan(){
-
-    if(!html5QrCode){
-        return;
-    }
-
-    html5QrCode.stop().then(function(){
-
-        showMessage("<div>已停止掃描</div>");
-
-    });
-
-}
-  </script>
-
-</div>
-
+<footer>手機版：登入 → 掃 QR → 上傳 Google 試算表</footer>
+<script src="app.js"></script>
 </body>
 </html>
