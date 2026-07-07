@@ -22,16 +22,19 @@ function setStatus(text){ $("#net").textContent = text; }
 function today(){ return new Date().toISOString().slice(0,10); }
 function nowText(){ return new Date().toLocaleString("zh-TW"); }
 function saveLocal(){ localStorage.setItem("tph_team_rows", JSON.stringify(localRows)); renderLocal(); }
+
 function showApp(){
   $("#loginCard").classList.add("hidden");
   $("#appCard").classList.remove("hidden");
   $("#engineerName").textContent = `${user.name}（${user.id}）`;
   renderLocal();
 }
+
 function showLogin(){
   $("#loginCard").classList.remove("hidden");
   $("#appCard").classList.add("hidden");
 }
+
 if(user){ showApp(); setStatus("已登入"); }
 
 $("#loginBtn").onclick = () => {
@@ -55,7 +58,9 @@ $("#logoutBtn").onclick = () => {
 async function startScan(){
   if(!window.Html5Qrcode) return alert("QR 掃描套件尚未載入，請確認網路。");
   if(scanner) return;
+
   scanner = new Html5Qrcode("reader");
+
   try{
     await scanner.start(
       { facingMode: "environment" },
@@ -71,6 +76,7 @@ async function startScan(){
     scanner = null;
   }
 }
+
 async function stopScan(){
   if(scanner){
     await scanner.stop().catch(()=>{});
@@ -78,6 +84,7 @@ async function stopScan(){
     scanner = null;
   }
 }
+
 $("#startBtn").onclick = startScan;
 $("#stopBtn").onclick = stopScan;
 
@@ -85,7 +92,8 @@ function parseQR(raw){
   raw = (raw || "").trim();
   if(!raw) return alert("沒有 QR 內容");
 
-  let meter = "", verify = "";
+  let meter = "";
+  let verify = "";
 
   try{
     const j = JSON.parse(raw);
@@ -97,8 +105,10 @@ function parseQR(raw){
     raw.split(/[;\n,|]/).forEach(part => {
       const arr = part.split(/[:=：]/);
       if(arr.length < 2) return;
+
       const k = arr[0].trim().toLowerCase();
       const v = arr.slice(1).join("=").trim();
+
       if(["meterno","meter","newmeterno","電表號碼","新電表號碼","表號"].includes(k)) meter = v;
       if(["verifyno","verify","checkno","檢定號碼","檢驗號碼","檢號"].includes(k)) verify = v;
     });
@@ -106,13 +116,19 @@ function parseQR(raw){
 
   if(!meter || !verify){
     const nums = raw.match(/\d{5,12}/g) || [];
-    meter = meter || nums[0] || "";
-    verify = verify || nums[1] || "";
+
+    // 台電 QR 格式：LOLA檢定號碼;新電表號碼
+    // 例如：LOLA15072060;02081166
+    // nums[0] = 檢定號碼
+    // nums[1] = 新電表號碼
+    meter = meter || nums[1] || "";
+    verify = verify || nums[0] || "";
   }
 
   $("#meterNo").value = meter;
   $("#verifyNo").value = verify;
 }
+
 $("#parseBtn").onclick = () => parseQR($("#qrRaw").value);
 
 function clearForm(){
@@ -121,10 +137,12 @@ function clearForm(){
   $("#verifyNo").value = "";
   $("#note").value = "";
 }
+
 $("#clearFormBtn").onclick = clearForm;
 
 $("#uploadBtn").onclick = async () => {
   if(!user) return alert("請先登入");
+
   const meterNo = $("#meterNo").value.trim();
   const verifyNo = $("#verifyNo").value.trim();
   const qrRaw = $("#qrRaw").value.trim();
@@ -154,8 +172,10 @@ $("#uploadBtn").onclick = async () => {
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(row)
     });
+
     alert("已上傳到 Excel / Google 試算表");
     clearForm();
+
   }catch(e){
     alert("上傳失敗，已保留在本機紀錄：" + e);
   }
@@ -164,20 +184,27 @@ $("#uploadBtn").onclick = async () => {
 function renderLocal(){
   const todayRows = localRows.filter(r => r.date === today());
   $("#todayCount").textContent = todayRows.length;
+
   $("#localList").textContent = localRows.length
     ? localRows.map((r,i)=>`${i+1}. ${r.time}｜${r.engineer_name}｜電表:${r.meter_no}｜檢驗:${r.verify_no}${r.note ? "｜"+r.note : ""}`).join("\n")
     : "尚無紀錄";
 }
+
 $("#clearLocalBtn").onclick = () => {
   if(confirm("確定清除本機紀錄？")){
     localRows = [];
     saveLocal();
   }
 };
+
 $("#exportCsvBtn").onclick = () => {
   if(!localRows.length) return alert("沒有資料");
+
   const cols = ["time","date","engineer_id","engineer_name","meter_no","verify_no","qr_raw","note"];
-  const csv = [cols.join(",")].concat(localRows.map(r => cols.map(c => `"${String(r[c]||"").replaceAll('"','""')}"`).join(","))).join("\n");
+  const csv = [cols.join(",")]
+    .concat(localRows.map(r => cols.map(c => `"${String(r[c]||"").replaceAll('"','""')}"`).join(",")))
+    .join("\n");
+
   const blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
