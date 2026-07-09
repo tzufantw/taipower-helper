@@ -16,3 +16,23 @@ button{border:0;background:#0f766e;color:white;font-weight:800}
 .result.err{background:#fee2e2;border-color:#dc2626}
 .hint{color:#64748b;line-height:1.6}
 @media(max-width:640px){.card{margin:10px;padding:16px}.top{align-items:flex-start}.small{width:100px}}
+.centerMsg{
+  position:fixed;
+  left:50%;
+  top:45%;
+  transform:translate(-50%,-50%);
+  z-index:9999;
+  width:82%;
+  max-width:420px;
+  padding:22px;
+  border-radius:18px;
+  text-align:center;
+  font-size:22px;
+  font-weight:900;
+  line-height:1.7;
+  box-shadow:0 8px 30px #0005;
+  display:none;
+}
+.centerMsg.ok{background:#dcfce7;color:#166534;border:3px solid #22c55e;}
+.centerMsg.dup{background:#fef3c7;color:#92400e;border:3px solid #f59e0b;}
+.centerMsg.err{background:#fee2e2;color:#991b1b;border:3px solid #ef4444;}
