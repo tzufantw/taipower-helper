@@ -14,14 +14,21 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
+
 let scanner = null;
 let user = JSON.parse(localStorage.getItem("tph_user") || "null");
 let lastRaw = "";
 let lastTime = 0;
+let isProcessing = false;
 let todayCount = Number(localStorage.getItem("tph_count_" + todayKey()) || "0");
 
-function todayKey(){ return new Date().toISOString().slice(0,10); }
-function setStatus(t){ $("#status").textContent = t; }
+function todayKey(){
+  return new Date().toISOString().slice(0,10);
+}
+
+function setStatus(t){
+  $("#status").textContent = t;
+}
 
 function showApp(){
   $("#loginCard").classList.add("hidden");
@@ -30,18 +37,22 @@ function showApp(){
   $("#todayCount").textContent = todayCount;
   setStatus("已登入");
 }
+
 function showLogin(){
   $("#loginCard").classList.remove("hidden");
   $("#scanCard").classList.add("hidden");
   setStatus("未登入");
 }
+
 if(user) showApp();
 
 $("#loginBtn").onclick = () => {
   const id = $("#username").value.trim();
   const pwd = $("#password").value.trim();
+
   if(!ACCOUNTS[id]) return alert("帳號不存在");
   if(ACCOUNTS[id].password !== pwd) return alert("密碼錯誤");
+
   user = { id, name: ACCOUNTS[id].name };
   localStorage.setItem("tph_user", JSON.stringify(user));
   showApp();
@@ -55,16 +66,21 @@ $("#logoutBtn").onclick = () => {
 
 function showCenter(type, html){
   let box = $("#centerMsg");
+
   if(!box){
     box = document.createElement("div");
     box.id = "centerMsg";
     document.body.appendChild(box);
   }
+
   box.className = "centerMsg " + type;
   box.innerHTML = html;
   box.style.display = "block";
+
   clearTimeout(window.msgTimer);
-  window.msgTimer = setTimeout(()=>{ box.style.display = "none"; }, 1000);
+  window.msgTimer = setTimeout(() => {
+    box.style.display = "none";
+  }, 1000);
 }
 
 function beep(type){
@@ -72,20 +88,33 @@ function beep(type){
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+
     osc.connect(gain);
     gain.connect(ctx.destination);
+
     osc.frequency.value = type === "dup" ? 350 : type === "err" ? 220 : 900;
     gain.gain.value = 0.2;
+
     osc.start();
-    setTimeout(()=>{ osc.stop(); ctx.close(); }, type === "err" ? 350 : 180);
+
+    setTimeout(() => {
+      osc.stop();
+      ctx.close();
+    }, type === "err" ? 350 : 180);
+
   }catch(e){}
 }
 
 function vibrate(type){
   if(!navigator.vibrate) return;
-  if(type === "dup") navigator.vibrate([120,80,120]);
-  else if(type === "err") navigator.vibrate([300]);
-  else navigator.vibrate([120]);
+
+  if(type === "dup"){
+    navigator.vibrate([120,80,120]);
+  }else if(type === "err"){
+    navigator.vibrate([300]);
+  }else{
+    navigator.vibrate([120]);
+  }
 }
 
 function notice(type, html){
@@ -96,8 +125,9 @@ function notice(type, html){
 
 function parseQR(raw){
   raw = String(raw || "").trim();
+
   const clean = raw.replace(/^L[o0]LA/i, "");
-  const parts = clean.split(";").map(x=>x.trim()).filter(Boolean);
+  const parts = clean.split(";").map(x => x.trim()).filter(Boolean);
 
   if(parts.length >= 2){
     return {
@@ -108,6 +138,7 @@ function parseQR(raw){
   }
 
   const nums = raw.match(/\d{5,12}/g) || [];
+
   if(nums.length >= 2){
     return {
       verify_no: nums[0],
@@ -120,21 +151,26 @@ function parseQR(raw){
 }
 
 function jsonp(params){
-  return new Promise((resolve, reject)=>{
-    const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random()*999999);
+  return new Promise((resolve, reject) => {
+    const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random() * 999999);
+
     params.callback = cb;
+
     const url = GAS_URL + "?" + new URLSearchParams(params).toString();
     const s = document.createElement("script");
+
     window[cb] = data => {
       delete window[cb];
       s.remove();
       resolve(data);
     };
+
     s.onerror = () => {
       delete window[cb];
       s.remove();
       reject(new Error("連線失敗"));
     };
+
     s.src = url;
     document.body.appendChild(s);
   });
@@ -142,14 +178,22 @@ function jsonp(params){
 
 async function handleScan(raw){
   const now = Date.now();
-  if(raw === lastRaw && now - lastTime < 10000) return;
 
+  if(isProcessing) return;
+
+  if(raw === lastRaw && now - lastTime < 10000){
+    return;
+  }
+
+  isProcessing = true;
   lastRaw = raw;
   lastTime = now;
 
   const parsed = parseQR(raw);
+
   if(!parsed){
     notice("err", "❌ QR 格式錯誤<br>請重新掃描");
+    isProcessing = false;
     return;
   }
 
@@ -164,7 +208,11 @@ async function handleScan(raw){
     });
 
     if(res.status === "duplicate"){
-      notice("dup", `⚠️ 今天已掃過<br>不重複寫入 Excel<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`);
+      notice(
+        "dup",
+        `⚠️ 今天已掃過<br>不重複寫入 Excel<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`
+      );
+      isProcessing = false;
       return;
     }
 
@@ -172,13 +220,22 @@ async function handleScan(raw){
       todayCount++;
       localStorage.setItem("tph_count_" + todayKey(), String(todayCount));
       $("#todayCount").textContent = todayCount;
-      notice("ok", `✅ 上傳成功<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`);
+
+      notice(
+        "ok",
+        `✅ 上傳成功<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`
+      );
+
+      isProcessing = false;
       return;
     }
 
     notice("err", "❌ 上傳失敗<br>" + (res.message || "未知錯誤"));
+    isProcessing = false;
+
   }catch(e){
     notice("err", "❌ 上傳失敗<br>" + e.message);
+    isProcessing = false;
   }
 }
 
@@ -193,7 +250,23 @@ async function startScan(){
     await scanner.start(
       { facingMode: "environment" },
       { fps: 10, qrbox: { width: 250, height: 250 } },
-      text => handleScan(text)
+      async text => {
+        if(scanner){
+          try{
+            scanner.pause(true);
+          }catch(e){}
+        }
+
+        await handleScan(text);
+
+        setTimeout(() => {
+          if(scanner){
+            try{
+              scanner.resume();
+            }catch(e){}
+          }
+        }, 3000);
+      }
     );
   }catch(e){
     scanner = null;
@@ -203,7 +276,7 @@ async function startScan(){
 
 async function stopScan(){
   if(scanner){
-    await scanner.stop().catch(()=>{});
+    await scanner.stop().catch(() => {});
     scanner.clear();
     scanner = null;
   }
