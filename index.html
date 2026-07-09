@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>台電換表助手</title>
+  <title>台電換表助手 V1</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://unpkg.com/html5-qrcode" defer></script>
 </head>
@@ -12,14 +12,16 @@
   <h1>台電換表助手</h1>
   <div id="status">未登入</div>
 </header>
+
 <main>
   <section id="loginCard" class="card">
     <h2>工程師登入</h2>
-    <input id="username" placeholder="帳號 A001">
-    <input id="password" type="password" placeholder="密碼">
+    <input id="username" placeholder="帳號，例如 A001" autocomplete="username">
+    <input id="password" type="password" placeholder="密碼" autocomplete="current-password">
     <button id="loginBtn">登入</button>
-    <p class="hint">A001～A020，密碼預設 1234。</p>
+    <p class="hint">帳號 A001～A020，密碼預設 1234。</p>
   </section>
+
   <section id="scanCard" class="card hidden">
     <div class="top">
       <div>
@@ -28,14 +30,16 @@
       </div>
       <button id="logoutBtn" class="gray small">登出</button>
     </div>
+
     <h2>掃新電表 QR Code</h2>
     <div id="reader"></div>
     <button id="startBtn">啟用相機掃描</button>
     <button id="stopBtn" class="gray">停止掃描</button>
     <div id="result" class="result">等待掃描...</div>
-    <p class="hint">掃描成功會自動上傳，不用按送出。重複掃描會提示，不會重複寫入 Excel。</p>
+    <p class="hint">掃到 QR 會自動上傳 Google 試算表。重複掃描會提示，不會重複寫入。</p>
   </section>
 </main>
+
 <script src="app.js"></script>
 </body>
 </html>
