@@ -10,32 +10,62 @@ const ACCOUNTS = {
   "A007": { password: "1234", name: "師傅A007" },
   "A008": { password: "1234", name: "師傅A008" },
   "A009": { password: "1234", name: "師傅A009" },
-  "A010": { password: "1234", name: "師傅A010" }
+  "A010": { password: "1234", name: "師傅A010" },
+  "A011": { password: "1234", name: "師傅A011" },
+  "A012": { password: "1234", name: "師傅A012" },
+  "A013": { password: "1234", name: "師傅A013" },
+  "A014": { password: "1234", name: "師傅A014" },
+  "A015": { password: "1234", name: "師傅A015" },
+  "A016": { password: "1234", name: "師傅A016" },
+  "A017": { password: "1234", name: "師傅A017" },
+  "A018": { password: "1234", name: "師傅A018" },
+  "A019": { password: "1234", name: "師傅A019" },
+  "A020": { password: "1234", name: "師傅A020" }
 };
 
 const $ = s => document.querySelector(s);
 let scanner = null;
-let user = JSON.parse(localStorage.getItem("tph_team_user") || "null");
-let localRows = JSON.parse(localStorage.getItem("tph_team_rows") || "[]");
+let user = JSON.parse(localStorage.getItem("tph_user") || "null");
+let lastRaw = "";
+let lastScanTime = 0;
+let todayCount = Number(localStorage.getItem("tph_today_count_" + todayKey()) || "0");
 
-function setStatus(text){ $("#net").textContent = text; }
-function today(){ return new Date().toISOString().slice(0,10); }
-function nowText(){ return new Date().toLocaleString("zh-TW"); }
-function saveLocal(){ localStorage.setItem("tph_team_rows", JSON.stringify(localRows)); renderLocal(); }
+function todayKey(){ return new Date().toISOString().slice(0,10); }
+function setStatus(t){ $("#status").textContent = t; }
+function setResult(text, cls=""){ $("#result").className = "result " + cls; $("#result").innerHTML = text; }
+
+function beep(type="ok"){
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = type === "dup" ? 420 : type === "err" ? 220 : 880;
+    gain.gain.value = 0.18;
+    osc.start();
+    setTimeout(() => { osc.stop(); ctx.close(); }, type === "dup" ? 280 : 160);
+  }catch(e){}
+}
+function vibrate(type="ok"){
+  if(navigator.vibrate) navigator.vibrate(type === "dup" ? [120,80,120] : type === "err" ? [300] : [120]);
+}
+function notify(type, text){
+  beep(type); vibrate(type); setResult(text, type === "ok" ? "ok" : type === "dup" ? "dup" : "err");
+}
 
 function showApp(){
   $("#loginCard").classList.add("hidden");
-  $("#appCard").classList.remove("hidden");
+  $("#scanCard").classList.remove("hidden");
   $("#engineerName").textContent = `${user.name}（${user.id}）`;
-  renderLocal();
+  $("#todayCount").textContent = todayCount;
+  setStatus("已登入");
 }
-
 function showLogin(){
   $("#loginCard").classList.remove("hidden");
-  $("#appCard").classList.add("hidden");
+  $("#scanCard").classList.add("hidden");
+  setStatus("未登入");
 }
-
-if(user){ showApp(); setStatus("已登入"); }
+if(user) showApp();
 
 $("#loginBtn").onclick = () => {
   const id = $("#username").value.trim();
@@ -43,175 +73,95 @@ $("#loginBtn").onclick = () => {
   if(!ACCOUNTS[id]) return alert("帳號不存在");
   if(ACCOUNTS[id].password !== pwd) return alert("密碼錯誤");
   user = { id, name: ACCOUNTS[id].name };
-  localStorage.setItem("tph_team_user", JSON.stringify(user));
-  setStatus("已登入");
+  localStorage.setItem("tph_user", JSON.stringify(user));
   showApp();
 };
 
 $("#logoutBtn").onclick = () => {
-  localStorage.removeItem("tph_team_user");
+  localStorage.removeItem("tph_user");
   user = null;
-  setStatus("未登入");
   showLogin();
 };
 
+function parseQR(raw){
+  raw = String(raw || "").trim();
+  const clean = raw.replace(/^L[o0]LA/i, "");
+  const parts = clean.split(";").map(x => x.trim()).filter(Boolean);
+  if(parts.length >= 2) return { verify_no: parts[0], meter_no: parts[1], qr_raw: raw };
+  const nums = raw.match(/\d{5,12}/g) || [];
+  if(nums.length >= 2) return { verify_no: nums[0], meter_no: nums[1], qr_raw: raw };
+  return null;
+}
+
+function jsonp(params){
+  return new Promise((resolve, reject) => {
+    const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random()*999999);
+    params.callback = cb;
+    const url = GAS_URL + "?" + new URLSearchParams(params).toString();
+    const s = document.createElement("script");
+    window[cb] = data => { delete window[cb]; s.remove(); resolve(data); };
+    s.onerror = () => { delete window[cb]; s.remove(); reject(new Error("連線失敗")); };
+    s.src = url;
+    document.body.appendChild(s);
+  });
+}
+
+async function handleScan(raw){
+  const now = Date.now();
+  if(raw === lastRaw && now - lastScanTime < 3000) return;
+  lastRaw = raw;
+  lastScanTime = now;
+  const parsed = parseQR(raw);
+  if(!parsed) return notify("err", "QR格式錯誤<br>" + raw);
+
+  setResult("上傳中...<br>電表：" + parsed.meter_no + "<br>檢定：" + parsed.verify_no);
+
+  try{
+    const res = await jsonp({
+      action: "uploadSimple",
+      account: user.id,
+      name: user.name,
+      meter_no: parsed.meter_no,
+      verify_no: parsed.verify_no,
+      qr_raw: parsed.qr_raw
+    });
+    if(res.status === "duplicate") return notify("dup", "⚠️ 今天已掃過，不重複寫入<br>電表：" + parsed.meter_no + "<br>檢定：" + parsed.verify_no);
+    if(res.status === "ok"){
+      todayCount++;
+      localStorage.setItem("tph_today_count_" + todayKey(), String(todayCount));
+      $("#todayCount").textContent = todayCount;
+      return notify("ok", "✅ 上傳成功<br>電表：" + parsed.meter_no + "<br>檢定：" + parsed.verify_no);
+    }
+    notify("err", "上傳失敗：" + (res.message || "未知錯誤"));
+  }catch(e){
+    notify("err", "上傳失敗：" + e.message);
+  }
+}
+
 async function startScan(){
+  if(!user) return alert("請先登入");
   if(!window.Html5Qrcode) return alert("QR 掃描套件尚未載入，請確認網路。");
   if(scanner) return;
-
   scanner = new Html5Qrcode("reader");
-
   try{
     await scanner.start(
       { facingMode: "environment" },
       { fps: 10, qrbox: { width: 250, height: 250 } },
-      txt => {
-        $("#qrRaw").value = txt;
-        parseQR(txt);
-        navigator.vibrate?.(120);
-      }
+      text => handleScan(text)
     );
+    setResult("相機已啟動，請掃描 QR Code");
   }catch(e){
-    alert("相機啟動失敗：" + e);
     scanner = null;
+    notify("err", "相機啟動失敗<br>請用 Chrome / Safari 開啟，並允許相機權限。");
   }
 }
-
 async function stopScan(){
   if(scanner){
     await scanner.stop().catch(()=>{});
     scanner.clear();
     scanner = null;
+    setResult("已停止掃描");
   }
 }
-
 $("#startBtn").onclick = startScan;
 $("#stopBtn").onclick = stopScan;
-
-function parseQR(raw){
-  raw = (raw || "").trim();
-  if(!raw) return alert("沒有 QR 內容");
-
-  let meter = "";
-  let verify = "";
-
-  try{
-    const j = JSON.parse(raw);
-    meter = j.meterNo || j.new_meter_no || j.電表號碼 || j.新電表號碼 || j.表號 || "";
-    verify = j.verifyNo || j.verify_no || j.檢定號碼 || j.檢驗號碼 || j.檢號 || "";
-  }catch(e){}
-
-  if(!meter || !verify){
-    raw.split(/[;\n,|]/).forEach(part => {
-      const arr = part.split(/[:=：]/);
-      if(arr.length < 2) return;
-
-      const k = arr[0].trim().toLowerCase();
-      const v = arr.slice(1).join("=").trim();
-
-      if(["meterno","meter","newmeterno","電表號碼","新電表號碼","表號"].includes(k)) meter = v;
-      if(["verifyno","verify","checkno","檢定號碼","檢驗號碼","檢號"].includes(k)) verify = v;
-    });
-  }
-
-  if(!meter || !verify){
-    const nums = raw.match(/\d{5,12}/g) || [];
-
-    // 台電 QR 格式：LOLA檢定號碼;新電表號碼
-    // 例如：LOLA15072060;02081166
-    // nums[0] = 檢定號碼
-    // nums[1] = 新電表號碼
-    meter = meter || nums[1] || "";
-    verify = verify || nums[0] || "";
-  }
-
-  $("#meterNo").value = meter;
-  $("#verifyNo").value = verify;
-}
-
-$("#parseBtn").onclick = () => parseQR($("#qrRaw").value);
-
-function clearForm(){
-  $("#qrRaw").value = "";
-  $("#meterNo").value = "";
-  $("#verifyNo").value = "";
-  $("#note").value = "";
-}
-
-$("#clearFormBtn").onclick = clearForm;
-
-$("#uploadBtn").onclick = async () => {
-  if(!user) return alert("請先登入");
-
-  const meterNo = $("#meterNo").value.trim();
-  const verifyNo = $("#verifyNo").value.trim();
-  const qrRaw = $("#qrRaw").value.trim();
-  const note = $("#note").value.trim();
-
-  if(!meterNo) return alert("沒有新電表號碼");
-  if(!verifyNo) return alert("沒有檢驗 / 檢定號碼");
-
-  const row = {
-    time: nowText(),
-    date: today(),
-    engineer_id: user.id,
-    engineer_name: user.name,
-    meter_no: meterNo,
-    verify_no: verifyNo,
-    qr_raw: qrRaw,
-    note
-  };
-
-  localRows.push(row);
-  saveLocal();
-
-  try{
-    await fetch(GAS_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(row)
-    });
-
-    alert("已上傳到 Excel / Google 試算表");
-    clearForm();
-
-  }catch(e){
-    alert("上傳失敗，已保留在本機紀錄：" + e);
-  }
-};
-
-function renderLocal(){
-  const todayRows = localRows.filter(r => r.date === today());
-  $("#todayCount").textContent = todayRows.length;
-
-  $("#localList").textContent = localRows.length
-    ? localRows.map((r,i)=>`${i+1}. ${r.time}｜${r.engineer_name}｜電表:${r.meter_no}｜檢驗:${r.verify_no}${r.note ? "｜"+r.note : ""}`).join("\n")
-    : "尚無紀錄";
-}
-
-$("#clearLocalBtn").onclick = () => {
-  if(confirm("確定清除本機紀錄？")){
-    localRows = [];
-    saveLocal();
-  }
-};
-
-$("#exportCsvBtn").onclick = () => {
-  if(!localRows.length) return alert("沒有資料");
-
-  const cols = ["time","date","engineer_id","engineer_name","meter_no","verify_no","qr_raw","note"];
-  const csv = [cols.join(",")]
-    .concat(localRows.map(r => cols.map(c => `"${String(r[c]||"").replaceAll('"','""')}"`).join(",")))
-    .join("\n");
-
-  const blob = new Blob(["\ufeff"+csv], {type:"text/csv;charset=utf-8"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "台電換表掃描紀錄.csv";
-  a.click();
-};
-
-if("serviceWorker" in navigator){
-  navigator.serviceWorker.register("./sw.js").catch(()=>{});
-}
