@@ -22,13 +22,8 @@ let lastTime = 0;
 let isProcessing = false;
 let todayCount = Number(localStorage.getItem("tph_count_" + todayKey()) || "0");
 
-function todayKey(){
-  return new Date().toISOString().slice(0,10);
-}
-
-function setStatus(t){
-  $("#status").textContent = t;
-}
+function todayKey(){ return new Date().toISOString().slice(0,10); }
+function setStatus(t){ $("#status").textContent = t; }
 
 function showApp(){
   $("#loginCard").classList.add("hidden");
@@ -47,7 +42,7 @@ function showLogin(){
 if(user) showApp();
 
 $("#loginBtn").onclick = () => {
-  const id = $("#username").value.trim();
+  const id = $("#username").value.trim().toUpperCase();
   const pwd = $("#password").value.trim();
 
   if(!ACCOUNTS[id]) return alert("帳號不存在");
@@ -64,19 +59,21 @@ $("#logoutBtn").onclick = () => {
   showLogin();
 };
 
+function setResult(html){
+  const el = $("#result");
+  if(el) el.innerHTML = html;
+}
+
 function showCenter(type, html){
   let box = $("#centerMsg");
-
   if(!box){
     box = document.createElement("div");
     box.id = "centerMsg";
     document.body.appendChild(box);
   }
-
   box.className = "centerMsg " + type;
   box.innerHTML = html;
   box.style.display = "block";
-
   clearTimeout(window.msgTimer);
   window.msgTimer = setTimeout(() => {
     box.style.display = "none";
@@ -88,63 +85,45 @@ function beep(type){
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-
     osc.connect(gain);
     gain.connect(ctx.destination);
-
     osc.frequency.value = type === "dup" ? 350 : type === "err" ? 220 : 900;
     gain.gain.value = 0.2;
-
     osc.start();
-
     setTimeout(() => {
       osc.stop();
       ctx.close();
     }, type === "err" ? 350 : 180);
-
   }catch(e){}
 }
 
 function vibrate(type){
   if(!navigator.vibrate) return;
-
-  if(type === "dup"){
-    navigator.vibrate([120,80,120]);
-  }else if(type === "err"){
-    navigator.vibrate([300]);
-  }else{
-    navigator.vibrate([120]);
-  }
+  if(type === "dup") navigator.vibrate([120,80,120]);
+  else if(type === "err") navigator.vibrate([300]);
+  else navigator.vibrate([120]);
 }
 
 function notice(type, html){
   beep(type);
   vibrate(type);
   showCenter(type, html);
+  setResult(html);
 }
 
 function parseQR(raw){
   raw = String(raw || "").trim();
-
   const clean = raw.replace(/^L[o0]LA/i, "");
   const parts = clean.split(";").map(x => x.trim()).filter(Boolean);
 
+  // 台電 QR：LOLA檢定號碼;新電表號碼
   if(parts.length >= 2){
-    return {
-      verify_no: parts[0],
-      meter_no: parts[1],
-      qr_raw: raw
-    };
+    return { verify_no: parts[0], meter_no: parts[1], qr_raw: raw };
   }
 
   const nums = raw.match(/\d{5,12}/g) || [];
-
   if(nums.length >= 2){
-    return {
-      verify_no: nums[0],
-      meter_no: nums[1],
-      qr_raw: raw
-    };
+    return { verify_no: nums[0], meter_no: nums[1], qr_raw: raw };
   }
 
   return null;
@@ -153,19 +132,26 @@ function parseQR(raw){
 function jsonp(params){
   return new Promise((resolve, reject) => {
     const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random() * 999999);
-
     params.callback = cb;
 
     const url = GAS_URL + "?" + new URLSearchParams(params).toString();
     const s = document.createElement("script");
 
+    const timer = setTimeout(() => {
+      delete window[cb];
+      s.remove();
+      reject(new Error("連線逾時"));
+    }, 10000);
+
     window[cb] = data => {
+      clearTimeout(timer);
       delete window[cb];
       s.remove();
       resolve(data);
     };
 
     s.onerror = () => {
+      clearTimeout(timer);
       delete window[cb];
       s.remove();
       reject(new Error("連線失敗"));
@@ -181,21 +167,21 @@ async function handleScan(raw){
 
   if(isProcessing) return;
 
-  if(raw === lastRaw && now - lastTime < 10000){
-    return;
-  }
+  // 相機不停，但是同一顆 QR 3 秒內忽略，避免連續觸發
+  if(raw === lastRaw && now - lastTime < 3000) return;
 
   isProcessing = true;
   lastRaw = raw;
   lastTime = now;
 
   const parsed = parseQR(raw);
-
   if(!parsed){
     notice("err", "❌ QR 格式錯誤<br>請重新掃描");
     isProcessing = false;
     return;
   }
+
+  setResult(`上傳中...<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`);
 
   try{
     const res = await jsonp({
@@ -208,10 +194,7 @@ async function handleScan(raw){
     });
 
     if(res.status === "duplicate"){
-      notice(
-        "dup",
-        `⚠️ 今天已掃過<br>不重複寫入 Excel<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`
-      );
+      notice("dup", `⚠️ 今天已掃過<br>不重複寫入 Excel<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`);
       isProcessing = false;
       return;
     }
@@ -220,12 +203,7 @@ async function handleScan(raw){
       todayCount++;
       localStorage.setItem("tph_count_" + todayKey(), String(todayCount));
       $("#todayCount").textContent = todayCount;
-
-      notice(
-        "ok",
-        `✅ 上傳成功<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`
-      );
-
+      notice("ok", `✅ 上傳成功<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`);
       isProcessing = false;
       return;
     }
@@ -250,24 +228,9 @@ async function startScan(){
     await scanner.start(
       { facingMode: "environment" },
       { fps: 10, qrbox: { width: 250, height: 250 } },
-      async text => {
-        if(scanner){
-          try{
-            scanner.pause(true);
-          }catch(e){}
-        }
-
-        await handleScan(text);
-
-        setTimeout(() => {
-          if(scanner){
-            try{
-              scanner.resume();
-            }catch(e){}
-          }
-        }, 3000);
-      }
+      text => handleScan(text)
     );
+    setResult("相機已啟動，請掃描 QR Code");
   }catch(e){
     scanner = null;
     notice("err", "❌ 相機啟動失敗<br>請允許相機權限");
@@ -279,6 +242,7 @@ async function stopScan(){
     await scanner.stop().catch(() => {});
     scanner.clear();
     scanner = null;
+    setResult("已停止掃描");
   }
 }
 
