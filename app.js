@@ -142,7 +142,7 @@ function jsonp(params){
 
 async function handleScan(raw){
   const now = Date.now();
-  if(raw === lastRaw && now - lastTime < 1000) return;
+  if(raw === lastRaw && now - lastTime < 10000) return;
 
   lastRaw = raw;
   lastTime = now;
