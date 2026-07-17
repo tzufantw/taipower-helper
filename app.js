@@ -26,17 +26,17 @@ function todayKey(){
   return new Date().toISOString().slice(0,10);
 }
 
-function codeStorageKey(){
-  return user ? "tph_meter_code_" + user.id : "tph_meter_code";
-}
-
 function setStatus(text){
   $("#status").textContent = text;
 }
 
-function normalizeMeterCode(value){
-  value = String(value || "").trim();
-  value = value.replace(/[^\d]/g, "");
+function getCodeKey(){
+  if (!user) return "tph_meter_code";
+  return "tph_meter_code_" + user.id;
+}
+
+function formatCode(value){
+  value = String(value || "").replace(/[^\d]/g, "");
 
   if (!value) return "";
 
@@ -51,43 +51,58 @@ function normalizeMeterCode(value){
   return value;
 }
 
-function nextMeterCode(value){
-  var code = normalizeMeterCode(value);
+function plusOneCode(value){
+  const code = formatCode(value);
 
   if (!code) return "";
 
-  var num = Number(code);
+  let numberValue = parseInt(code, 10);
 
-  if (isNaN(num)) return "";
+  if (isNaN(numberValue)) return "";
 
-  num = num + 1;
+  numberValue = numberValue + 1;
 
-  if (num > 9999) {
-    num = 9999;
+  if (numberValue > 9999) {
+    numberValue = 9999;
   }
 
-  return normalizeMeterCode(String(num));
+  return formatCode(String(numberValue));
 }
 
-function saveMeterCode(value){
-  var code = normalizeMeterCode(value);
+function getMeterCodeInput(){
+  return document.getElementById("meterCode");
+}
+
+function setMeterCode(value){
+  const input = getMeterCodeInput();
+  const code = formatCode(value);
+
+  if (input) {
+    input.value = code;
+    input.setAttribute("value", code);
+  }
 
   if (code) {
-    localStorage.setItem(codeStorageKey(), code);
+    localStorage.setItem(getCodeKey(), code);
   }
+
+  return code;
 }
 
-function loadMeterCode(){
-  if (!user) return "";
-  return normalizeMeterCode(localStorage.getItem(codeStorageKey()) || "");
+function getMeterCode(){
+  const input = getMeterCodeInput();
+
+  if (!input) return "";
+
+  return formatCode(input.value);
 }
 
 function ensureMeterCodeInput(){
-  if ($("#meterCode")) {
-    var existingCode = loadMeterCode();
+  if (getMeterCodeInput()) {
+    const saved = localStorage.getItem(getCodeKey()) || "";
 
-    if (existingCode && !$("#meterCode").value) {
-      $("#meterCode").value = existingCode;
+    if (saved && !getMeterCodeInput().value) {
+      setMeterCode(saved);
     }
 
     return;
@@ -112,7 +127,7 @@ function ensureMeterCodeInput(){
       style="width:100%;box-sizing:border-box;font-size:22px;padding:10px;border:1px solid #bbb;border-radius:8px;text-align:center;"
     >
     <div style="font-size:13px;color:#666;margin-top:6px;">
-      掃描成功後會自動加 1
+      掃描成功後會自動跳下一碼
     </div>
   `;
 
@@ -124,34 +139,20 @@ function ensureMeterCodeInput(){
     scanCard.insertBefore(box, scanCard.firstChild);
   }
 
-  const meterCodeInput = $("#meterCode");
-  const savedCode = loadMeterCode();
+  const input = getMeterCodeInput();
+  const saved = localStorage.getItem(getCodeKey()) || "";
 
-  if (savedCode) {
-    meterCodeInput.value = savedCode;
+  if (saved) {
+    setMeterCode(saved);
   }
 
-  meterCodeInput.addEventListener("blur", function(){
-    this.value = normalizeMeterCode(this.value);
-    saveMeterCode(this.value);
-  });
-
-  meterCodeInput.addEventListener("input", function(){
+  input.addEventListener("input", function(){
     this.value = this.value.replace(/[^\d]/g, "").slice(0, 4);
   });
-}
 
-function advanceMeterCode(){
-  const meterCodeInput = $("#meterCode");
-
-  if (!meterCodeInput) return;
-
-  const nextCode = nextMeterCode(meterCodeInput.value);
-
-  if (nextCode) {
-    meterCodeInput.value = nextCode;
-    saveMeterCode(nextCode);
-  }
+  input.addEventListener("blur", function(){
+    setMeterCode(this.value);
+  });
 }
 
 function showApp(){
@@ -326,19 +327,18 @@ async function handleScan(raw){
 
   if (raw === lastRaw && now - lastTime < 3000) return;
 
-  const meterCodeInput = $("#meterCode");
-  const meterCode = normalizeMeterCode(meterCodeInput ? meterCodeInput.value : "");
+  const meterCode = getMeterCode();
 
   if (!meterCode) {
     notice("err", "請先輸入電表編碼<br>例如：0001");
-    if (meterCodeInput) meterCodeInput.focus();
+
+    const input = getMeterCodeInput();
+    if (input) input.focus();
+
     return;
   }
 
-  if (meterCodeInput) {
-    meterCodeInput.value = meterCode;
-    saveMeterCode(meterCode);
-  }
+  setMeterCode(meterCode);
 
   isProcessing = true;
   lastRaw = raw;
@@ -374,7 +374,6 @@ async function handleScan(raw){
       notice(
         "dup",
         `今天已掃過<br>` +
-        `請確認 Excel<br>` +
         `電表編碼：${meterCode}<br>` +
         `電表號碼：${parsed.meter_no}<br>` +
         `檢定號碼：${parsed.verify_no}`
@@ -389,13 +388,14 @@ async function handleScan(raw){
       localStorage.setItem("tph_count_" + todayKey(), String(todayCount));
       $("#todayCount").textContent = todayCount;
 
-      advanceMeterCode();
+      const nextCode = plusOneCode(meterCode);
+      setMeterCode(nextCode);
 
       notice(
         "ok",
         `上傳成功<br>` +
         `本筆編碼：${meterCode}<br>` +
-        `下一筆編碼：${$("#meterCode") ? $("#meterCode").value : ""}<br>` +
+        `下一筆編碼：${nextCode}<br>` +
         `電表號碼：${parsed.meter_no}<br>` +
         `檢定號碼：${parsed.verify_no}`
       );
@@ -416,12 +416,11 @@ async function handleScan(raw){
 async function startScan(){
   if (!user) return alert("請先登入");
 
-  if (!$("#meterCode") || !normalizeMeterCode($("#meterCode").value)) {
+  if (!getMeterCode()) {
     alert("請先輸入電表編碼，例如 0001");
 
-    if ($("#meterCode")) {
-      $("#meterCode").focus();
-    }
+    const input = getMeterCodeInput();
+    if (input) input.focus();
 
     return;
   }
