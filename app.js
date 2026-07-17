@@ -22,31 +22,88 @@ let lastTime = 0;
 let isProcessing = false;
 let todayCount = Number(localStorage.getItem("tph_count_" + todayKey()) || "0");
 
-function todayKey(){ return new Date().toISOString().slice(0,10); }
-function setStatus(t){ $("#status").textContent = t; }
+function todayKey(){
+  return new Date().toISOString().slice(0,10);
+}
+
+function setStatus(text){
+  $("#status").textContent = text;
+}
+
+function normalizeMeterCode(value){
+  value = String(value || "").trim();
+  value = value.replace(/[^\d]/g, "");
+
+  if (!value) return "";
+
+  while (value.length < 4) {
+    value = "0" + value;
+  }
+
+  if (value.length > 4) {
+    value = value.slice(-4);
+  }
+
+  return value;
+}
+
+function ensureMeterCodeInput(){
+  if ($("#meterCode")) return;
+
+  const scanCard = $("#scanCard");
+  if (!scanCard) return;
+
+  const box = document.createElement("div");
+  box.className = "meter-code-box";
+  box.innerHTML = `
+    <label for="meterCode" style="display:block;font-weight:bold;margin:10px 0 6px;">
+      電表編碼
+    </label>
+    <input
+      id="meterCode"
+      type="tel"
+      inputmode="numeric"
+      maxlength="4"
+      placeholder="例如 0001"
+      style="width:100%;box-sizing:border-box;font-size:22px;padding:10px;border:1px solid #bbb;border-radius:8px;text-align:center;"
+    >
+  `;
+
+  const reader = $("#reader");
+  if (reader && reader.parentNode) {
+    reader.parentNode.insertBefore(box, reader);
+  } else {
+    scanCard.insertBefore(box, scanCard.firstChild);
+  }
+
+  $("#meterCode").addEventListener("blur", function(){
+    this.value = normalizeMeterCode(this.value);
+  });
+}
 
 function showApp(){
   $("#loginCard").classList.add("hidden");
   $("#scanCard").classList.remove("hidden");
   $("#engineerName").textContent = `${user.name}（${user.id}）`;
   $("#todayCount").textContent = todayCount;
+  ensureMeterCodeInput();
   setStatus("已登入");
 }
 
 function showLogin(){
   $("#loginCard").classList.remove("hidden");
   $("#scanCard").classList.add("hidden");
-  setStatus("未登入");
+  setStatus("請登入");
 }
 
-if(user) showApp();
+if (user) showApp();
 
 $("#loginBtn").onclick = () => {
   const id = $("#username").value.trim().toUpperCase();
   const pwd = $("#password").value.trim();
 
-  if(!ACCOUNTS[id]) return alert("帳號不存在");
-  if(ACCOUNTS[id].password !== pwd) return alert("密碼錯誤");
+  if (!ACCOUNTS[id]) return alert("帳號不存在");
+  if (ACCOUNTS[id].password !== pwd) return alert("密碼錯誤");
 
   user = { id, name: ACCOUNTS[id].name };
   localStorage.setItem("tph_user", JSON.stringify(user));
@@ -61,47 +118,61 @@ $("#logoutBtn").onclick = () => {
 
 function setResult(html){
   const el = $("#result");
-  if(el) el.innerHTML = html;
+  if (el) el.innerHTML = html;
 }
 
 function showCenter(type, html){
   let box = $("#centerMsg");
-  if(!box){
+
+  if (!box) {
     box = document.createElement("div");
     box.id = "centerMsg";
     document.body.appendChild(box);
   }
+
   box.className = "centerMsg " + type;
   box.innerHTML = html;
   box.style.display = "block";
+
   clearTimeout(window.msgTimer);
+
   window.msgTimer = setTimeout(() => {
     box.style.display = "none";
   }, 1000);
 }
 
 function beep(type){
-  try{
+  try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+
     osc.connect(gain);
     gain.connect(ctx.destination);
+
     osc.frequency.value = type === "dup" ? 350 : type === "err" ? 220 : 900;
     gain.gain.value = 0.2;
+
     osc.start();
+
     setTimeout(() => {
       osc.stop();
       ctx.close();
     }, type === "err" ? 350 : 180);
-  }catch(e){}
+
+  } catch(e) {}
 }
 
 function vibrate(type){
-  if(!navigator.vibrate) return;
-  if(type === "dup") navigator.vibrate([120,80,120]);
-  else if(type === "err") navigator.vibrate([300]);
-  else navigator.vibrate([120]);
+  if (!navigator.vibrate) return;
+
+  if (type === "dup") {
+    navigator.vibrate([120,80,120]);
+  } else if (type === "err") {
+    navigator.vibrate([300]);
+  } else {
+    navigator.vibrate([120]);
+  }
 }
 
 function notice(type, html){
@@ -113,17 +184,26 @@ function notice(type, html){
 
 function parseQR(raw){
   raw = String(raw || "").trim();
+
   const clean = raw.replace(/^L[o0]LA/i, "");
   const parts = clean.split(";").map(x => x.trim()).filter(Boolean);
 
-  // 台電 QR：LOLA檢定號碼;新電表號碼
-  if(parts.length >= 2){
-    return { verify_no: parts[0], meter_no: parts[1], qr_raw: raw };
+  if (parts.length >= 2) {
+    return {
+      verify_no: parts[0],
+      meter_no: parts[1],
+      qr_raw: raw
+    };
   }
 
   const nums = raw.match(/\d{5,12}/g) || [];
-  if(nums.length >= 2){
-    return { verify_no: nums[0], meter_no: nums[1], qr_raw: raw };
+
+  if (nums.length >= 2) {
+    return {
+      verify_no: nums[0],
+      meter_no: nums[1],
+      qr_raw: raw
+    };
   }
 
   return null;
@@ -132,117 +212,168 @@ function parseQR(raw){
 function jsonp(params){
   return new Promise((resolve, reject) => {
     const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random() * 999999);
+
     params.callback = cb;
 
     const url = GAS_URL + "?" + new URLSearchParams(params).toString();
-    const s = document.createElement("script");
+    const script = document.createElement("script");
 
     const timer = setTimeout(() => {
       delete window[cb];
-      s.remove();
+      script.remove();
       reject(new Error("連線逾時"));
     }, 10000);
 
     window[cb] = data => {
       clearTimeout(timer);
       delete window[cb];
-      s.remove();
+      script.remove();
       resolve(data);
     };
 
-    s.onerror = () => {
+    script.onerror = () => {
       clearTimeout(timer);
       delete window[cb];
-      s.remove();
+      script.remove();
       reject(new Error("連線失敗"));
     };
 
-    s.src = url;
-    document.body.appendChild(s);
+    script.src = url;
+    document.body.appendChild(script);
   });
 }
 
 async function handleScan(raw){
   const now = Date.now();
 
-  if(isProcessing) return;
+  if (isProcessing) return;
 
-  // 相機不停，但是同一顆 QR 3 秒內忽略，避免連續觸發
-  if(raw === lastRaw && now - lastTime < 3000) return;
+  if (raw === lastRaw && now - lastTime < 3000) return;
+
+  const meterCodeInput = $("#meterCode");
+  const meterCode = normalizeMeterCode(meterCodeInput ? meterCodeInput.value : "");
+
+  if (!meterCode) {
+    notice("err", "請先輸入電表編碼<br>例如：0001");
+    if (meterCodeInput) meterCodeInput.focus();
+    return;
+  }
+
+  if (meterCodeInput) meterCodeInput.value = meterCode;
 
   isProcessing = true;
   lastRaw = raw;
   lastTime = now;
 
   const parsed = parseQR(raw);
-  if(!parsed){
-    notice("err", "❌ QR 格式錯誤<br>請重新掃描");
+
+  if (!parsed) {
+    notice("err", "QR 解析失敗<br>請重新掃描");
     isProcessing = false;
     return;
   }
 
-  setResult(`上傳中...<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`);
+  setResult(
+    `上傳中...<br>` +
+    `電表編碼：${meterCode}<br>` +
+    `電表號碼：${parsed.meter_no}<br>` +
+    `檢定號碼：${parsed.verify_no}`
+  );
 
-  try{
+  try {
     const res = await jsonp({
       action: "uploadSimple",
       account: user.id,
       name: user.name,
+      meter_code: meterCode,
       meter_no: parsed.meter_no,
       verify_no: parsed.verify_no,
       qr_raw: parsed.qr_raw
     });
 
-    if(res.status === "duplicate"){
-      notice("dup", `⚠️ 今天已掃過<br>不重複寫入 Excel<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`);
+    if (res.status === "duplicate") {
+      notice(
+        "dup",
+        `今天已掃過<br>` +
+        `請確認 Excel<br>` +
+        `電表編碼：${meterCode}<br>` +
+        `電表號碼：${parsed.meter_no}<br>` +
+        `檢定號碼：${parsed.verify_no}`
+      );
+
       isProcessing = false;
       return;
     }
 
-    if(res.status === "ok"){
+    if (res.status === "ok") {
       todayCount++;
       localStorage.setItem("tph_count_" + todayKey(), String(todayCount));
       $("#todayCount").textContent = todayCount;
-      notice("ok", `✅ 上傳成功<br>電表：${parsed.meter_no}<br>檢定：${parsed.verify_no}`);
+
+      notice(
+        "ok",
+        `上傳成功<br>` +
+        `電表編碼：${meterCode}<br>` +
+        `電表號碼：${parsed.meter_no}<br>` +
+        `檢定號碼：${parsed.verify_no}`
+      );
+
+      if (meterCodeInput) {
+        meterCodeInput.focus();
+        meterCodeInput.select();
+      }
+
       isProcessing = false;
       return;
     }
 
-    notice("err", "❌ 上傳失敗<br>" + (res.message || "未知錯誤"));
+    notice("err", "上傳失敗<br>" + (res.message || "未知錯誤"));
     isProcessing = false;
 
-  }catch(e){
-    notice("err", "❌ 上傳失敗<br>" + e.message);
+  } catch(e) {
+    notice("err", "上傳失敗<br>" + e.message);
     isProcessing = false;
   }
 }
 
 async function startScan(){
-  if(!user) return alert("請先登入");
-  if(!window.Html5Qrcode) return alert("QR 掃描套件尚未載入，請確認網路。");
-  if(scanner) return;
+  if (!user) return alert("請先登入");
+
+  if (!$("#meterCode") || !normalizeMeterCode($("#meterCode").value)) {
+    alert("請先輸入電表編碼，例如 0001");
+    if ($("#meterCode")) $("#meterCode").focus();
+    return;
+  }
+
+  if (!window.Html5Qrcode) {
+    return alert("QR 掃描器尚未載入，請重新整理頁面");
+  }
+
+  if (scanner) return;
 
   scanner = new Html5Qrcode("reader");
 
-  try{
+  try {
     await scanner.start(
       { facingMode: "environment" },
       { fps: 10, qrbox: { width: 250, height: 250 } },
       text => handleScan(text)
     );
-    setResult("相機已啟動，請掃描 QR Code");
-  }catch(e){
+
+    setResult("掃描中，請對準 QR Code");
+
+  } catch(e) {
     scanner = null;
-    notice("err", "❌ 相機啟動失敗<br>請允許相機權限");
+    notice("err", "開啟相機失敗<br>請檢查相機權限");
   }
 }
 
 async function stopScan(){
-  if(scanner){
+  if (scanner) {
     await scanner.stop().catch(() => {});
     scanner.clear();
     scanner = null;
-    setResult("已停止掃描");
+    setResult("掃描已停止");
   }
 }
 
