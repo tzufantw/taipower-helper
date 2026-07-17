@@ -26,6 +26,10 @@ function todayKey(){
   return new Date().toISOString().slice(0,10);
 }
 
+function codeStorageKey(){
+  return user ? "tph_meter_code_" + user.id : "tph_meter_code";
+}
+
 function setStatus(text){
   $("#status").textContent = text;
 }
@@ -47,10 +51,50 @@ function normalizeMeterCode(value){
   return value;
 }
 
+function nextMeterCode(value){
+  var code = normalizeMeterCode(value);
+
+  if (!code) return "";
+
+  var num = Number(code);
+
+  if (isNaN(num)) return "";
+
+  num = num + 1;
+
+  if (num > 9999) {
+    num = 9999;
+  }
+
+  return normalizeMeterCode(String(num));
+}
+
+function saveMeterCode(value){
+  var code = normalizeMeterCode(value);
+
+  if (code) {
+    localStorage.setItem(codeStorageKey(), code);
+  }
+}
+
+function loadMeterCode(){
+  if (!user) return "";
+  return normalizeMeterCode(localStorage.getItem(codeStorageKey()) || "");
+}
+
 function ensureMeterCodeInput(){
-  if ($("#meterCode")) return;
+  if ($("#meterCode")) {
+    var existingCode = loadMeterCode();
+
+    if (existingCode && !$("#meterCode").value) {
+      $("#meterCode").value = existingCode;
+    }
+
+    return;
+  }
 
   const scanCard = $("#scanCard");
+
   if (!scanCard) return;
 
   const box = document.createElement("div");
@@ -67,18 +111,47 @@ function ensureMeterCodeInput(){
       placeholder="例如 0001"
       style="width:100%;box-sizing:border-box;font-size:22px;padding:10px;border:1px solid #bbb;border-radius:8px;text-align:center;"
     >
+    <div style="font-size:13px;color:#666;margin-top:6px;">
+      掃描成功後會自動加 1
+    </div>
   `;
 
   const reader = $("#reader");
+
   if (reader && reader.parentNode) {
     reader.parentNode.insertBefore(box, reader);
   } else {
     scanCard.insertBefore(box, scanCard.firstChild);
   }
 
-  $("#meterCode").addEventListener("blur", function(){
+  const meterCodeInput = $("#meterCode");
+  const savedCode = loadMeterCode();
+
+  if (savedCode) {
+    meterCodeInput.value = savedCode;
+  }
+
+  meterCodeInput.addEventListener("blur", function(){
     this.value = normalizeMeterCode(this.value);
+    saveMeterCode(this.value);
   });
+
+  meterCodeInput.addEventListener("input", function(){
+    this.value = this.value.replace(/[^\d]/g, "").slice(0, 4);
+  });
+}
+
+function advanceMeterCode(){
+  const meterCodeInput = $("#meterCode");
+
+  if (!meterCodeInput) return;
+
+  const nextCode = nextMeterCode(meterCodeInput.value);
+
+  if (nextCode) {
+    meterCodeInput.value = nextCode;
+    saveMeterCode(nextCode);
+  }
 }
 
 function showApp(){
@@ -118,7 +191,10 @@ $("#logoutBtn").onclick = () => {
 
 function setResult(html){
   const el = $("#result");
-  if (el) el.innerHTML = html;
+
+  if (el) {
+    el.innerHTML = html;
+  }
 }
 
 function showCenter(type, html){
@@ -259,7 +335,10 @@ async function handleScan(raw){
     return;
   }
 
-  if (meterCodeInput) meterCodeInput.value = meterCode;
+  if (meterCodeInput) {
+    meterCodeInput.value = meterCode;
+    saveMeterCode(meterCode);
+  }
 
   isProcessing = true;
   lastRaw = raw;
@@ -310,18 +389,16 @@ async function handleScan(raw){
       localStorage.setItem("tph_count_" + todayKey(), String(todayCount));
       $("#todayCount").textContent = todayCount;
 
+      advanceMeterCode();
+
       notice(
         "ok",
         `上傳成功<br>` +
-        `電表編碼：${meterCode}<br>` +
+        `本筆編碼：${meterCode}<br>` +
+        `下一筆編碼：${$("#meterCode") ? $("#meterCode").value : ""}<br>` +
         `電表號碼：${parsed.meter_no}<br>` +
         `檢定號碼：${parsed.verify_no}`
       );
-
-      if (meterCodeInput) {
-        meterCodeInput.focus();
-        meterCodeInput.select();
-      }
 
       isProcessing = false;
       return;
@@ -341,7 +418,11 @@ async function startScan(){
 
   if (!$("#meterCode") || !normalizeMeterCode($("#meterCode").value)) {
     alert("請先輸入電表編碼，例如 0001");
-    if ($("#meterCode")) $("#meterCode").focus();
+
+    if ($("#meterCode")) {
+      $("#meterCode").focus();
+    }
+
     return;
   }
 
