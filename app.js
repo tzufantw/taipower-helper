@@ -1,10 +1,10 @@
 const GAS_URL = "https://script.google.com/macros/s/AKfycbzq2ywkhggukhdVMcKaEb37mi8tFGM-DmysCOBX_cvX9MCfXp8t-yA7we-xkyVi9dQK/exec";
 
 const ACCOUNTS = {
-  A001:{password:"1234",name:"師傅A001"}, A002:{password:"1234",name:"師傅A002"},
-  A003:{password:"1234",name:"師傅A003"}, A004:{password:"1234",name:"師傅A004"},
-  A005:{password:"1234",name:"師傅A005"}, A006:{password:"1234",name:"師傅A006"},
-  A007:{password:"1234",name:"師傅A007"}, A008:{password:"1234",name:"師傅A008"},
+  A001:{password:"1234",name:"四爺"}, A002:{password:"1234",name:"古德福"},
+  A003:{password:"1234",name:"鄭福寶"}, A004:{password:"1234",name:"阿清"},
+  A005:{password:"1234",name:"雲虎"}, A006:{password:"1234",name:"鴻志"},
+  A007:{password:"1234",name:"沈定禾"}, A008:{password:"1234",name:"師傅A008"},
   A009:{password:"1234",name:"師傅A009"}, A010:{password:"1234",name:"師傅A010"},
   A011:{password:"1234",name:"師傅A011"}, A012:{password:"1234",name:"師傅A012"},
   A013:{password:"1234",name:"師傅A013"}, A014:{password:"1234",name:"師傅A014"},
