@@ -27,11 +27,7 @@ const QR_SCAN_CONFIG = {
   }
 };
 
-const CAMERA_CONSTRAINTS = {
-  facingMode: { ideal: "environment" },
-  width: { ideal: 1280 },
-  height: { ideal: 720 }
-};
+const CAMERA_START_CONFIG = { facingMode: "environment" };
 
 let scanner = null;
 let user = JSON.parse(localStorage.getItem("tph_user") || "null");
@@ -508,7 +504,7 @@ async function startScan(){
 
   try {
     await scanner.start(
-      CAMERA_CONSTRAINTS,
+      CAMERA_START_CONFIG,
       QR_SCAN_CONFIG,
       text => handleScan(text)
     );
@@ -546,8 +542,20 @@ async function startScan(){
     setResult("V36 相容掃描中，請保持約 15～25 公分距離");
 
   } catch(e) {
+    try {
+      if (scanner) {
+        await scanner.stop().catch(() => {});
+        scanner.clear();
+      }
+    } catch (_) {}
+
     scanner = null;
-    notice("err", "開啟相機失敗<br>請檢查相機權限");
+    notice(
+      "err",
+      "開啟相機失敗<br>" +
+      "請允許相機權限後重新整理<br>" +
+      `<small>${e && e.message ? e.message : String(e || "")}</small>`
+    );
   }
 }
 

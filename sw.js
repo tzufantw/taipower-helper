@@ -1,5 +1,5 @@
-const CACHE="tph-team-v36";
-const ASSETS=["./","./index.html","./style.css","./app.js?v=36","./manifest.json"];
+const CACHE="tph-team-v36-1";
+const ASSETS=["./","./index.html","./style.css","./app.js?v=36.1","./manifest.json"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
 self.addEventListener("activate",e=>e.waitUntil(
   caches.keys().then(keys=>Promise.all(
