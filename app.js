@@ -474,6 +474,28 @@ async function handleScan(raw){
   }
 }
 
+async function handleDecodedText(text){
+  if (isProcessing) return;
+
+  try {
+    if (scanner && scanner.pause) {
+      scanner.pause(true);
+    }
+  } catch (_) {}
+
+  setResult("已掃描 QR Code，正在上傳...");
+
+  try {
+    await handleScan(text);
+  } finally {
+    try {
+      if (scanner && scanner.resume) {
+        scanner.resume();
+      }
+    } catch (_) {}
+  }
+}
+
 async function startScan(){
   if (!user) return alert("請先登入");
 
@@ -506,7 +528,7 @@ async function startScan(){
     await scanner.start(
       CAMERA_START_CONFIG,
       QR_SCAN_CONFIG,
-      text => handleScan(text)
+      text => handleDecodedText(text)
     );
 
     // Use continuous autofocus where the mobile browser exposes it.
