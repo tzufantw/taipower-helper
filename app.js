@@ -14,6 +14,19 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
+const APP_VERSION = "32";
+const QR_SCAN_CONFIG = {
+  fps: 20,
+  qrbox: (viewfinderWidth, viewfinderHeight) => {
+    const shortestSide = Math.min(viewfinderWidth, viewfinderHeight);
+    const size = Math.max(220, Math.min(360, Math.floor(shortestSide * 0.72)));
+    return { width: size, height: size };
+  },
+  aspectRatio: 4 / 3,
+  experimentalFeatures: {
+    useBarCodeDetectorIfSupported: true
+  }
+};
 
 let scanner = null;
 let user = JSON.parse(localStorage.getItem("tph_user") || "null");
@@ -161,7 +174,7 @@ function showApp(){
   $("#engineerName").textContent = `${user.name}（${user.id}）`;
   $("#todayCount").textContent = todayCount;
   ensureMeterCodeInput();
-  setStatus("已登入");
+  setStatus(`已登入・V${APP_VERSION}`);
 }
 
 function showLogin(){
@@ -431,16 +444,24 @@ async function startScan(){
 
   if (scanner) return;
 
-  scanner = new Html5Qrcode("reader");
+  const scannerOptions = { verbose: false };
+
+  if (window.Html5QrcodeSupportedFormats) {
+    scannerOptions.formatsToSupport = [
+      Html5QrcodeSupportedFormats.QR_CODE
+    ];
+  }
+
+  scanner = new Html5Qrcode("reader", scannerOptions);
 
   try {
     await scanner.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 250, height: 250 } },
+      QR_SCAN_CONFIG,
       text => handleScan(text)
     );
 
-    setResult("掃描中，請對準 QR Code");
+    setResult("V32 快速掃描中，請將 QR Code 放入框內");
 
   } catch(e) {
     scanner = null;
