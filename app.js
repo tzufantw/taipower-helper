@@ -14,15 +14,17 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
-const APP_VERSION = "32";
+const APP_VERSION = "33";
 const QR_SCAN_CONFIG = {
-  fps: 20,
+  // Reducing scan load gives the phone camera more time to autofocus.
+  fps: 12,
   qrbox: (viewfinderWidth, viewfinderHeight) => {
     const shortestSide = Math.min(viewfinderWidth, viewfinderHeight);
-    const size = Math.max(220, Math.min(360, Math.floor(shortestSide * 0.72)));
+    const size = Math.max(210, Math.min(330, Math.floor(shortestSide * 0.68)));
     return { width: size, height: size };
   },
   aspectRatio: 4 / 3,
+  disableFlip: true,
   experimentalFeatures: {
     useBarCodeDetectorIfSupported: true
   }
@@ -456,12 +458,32 @@ async function startScan(){
 
   try {
     await scanner.start(
-      { facingMode: "environment" },
+      {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
       QR_SCAN_CONFIG,
       text => handleScan(text)
     );
 
-    setResult("V32 快速掃描中，請將 QR Code 放入框內");
+    // Use continuous autofocus where the mobile browser exposes it.
+    try {
+      const capabilities = scanner.getRunningTrackCapabilities
+        ? scanner.getRunningTrackCapabilities()
+        : {};
+
+      if (capabilities && Array.isArray(capabilities.focusMode) &&
+          capabilities.focusMode.includes("continuous")) {
+        await scanner.applyVideoConstraints({
+          advanced: [{ focusMode: "continuous" }]
+        });
+      }
+    } catch (_) {
+      // iPhone Safari may not expose focus controls; scanning still works.
+    }
+
+    setResult("V33 快速對焦中，請保持約 15～25 公分距離");
 
   } catch(e) {
     scanner = null;
