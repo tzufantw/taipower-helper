@@ -14,7 +14,9 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
-const APP_VERSION = "34";
+const APP_VERSION = "35";
+const SCANNED_KEYS_STORAGE = "taipower_helper_scanned_keys_v35";
+const MAX_SCANNED_KEYS = 20000;
 const QR_SCAN_CONFIG = {
   // Reducing scan load gives the phone camera more time to autofocus.
   fps: 12,
@@ -35,10 +37,44 @@ let user = JSON.parse(localStorage.getItem("tph_user") || "null");
 let lastRaw = "";
 let lastTime = 0;
 let isProcessing = false;
+let scannedKeys = loadScannedKeys();
 let todayCount = Number(localStorage.getItem("tph_count_" + todayKey()) || "0");
 
 function todayKey(){
   return new Date().toISOString().slice(0,10);
+}
+
+function loadScannedKeys(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(SCANNED_KEYS_STORAGE) || "[]");
+    return new Set(Array.isArray(saved) ? saved : []);
+  } catch (error) {
+    return new Set();
+  }
+}
+
+function makeDuplicateKey(parsed){
+  const meterNo = String(parsed && parsed.meter_no || "").replace(/\D/g, "");
+  const verifyNo = String(parsed && parsed.verify_no || "").replace(/\D/g, "");
+  return meterNo && verifyNo ? meterNo + "|" + verifyNo : "";
+}
+
+function rememberScannedKey(key){
+  if (!key) return;
+
+  scannedKeys.add(key);
+  const saved = Array.from(scannedKeys);
+
+  if (saved.length > MAX_SCANNED_KEYS) {
+    saved.splice(0, saved.length - MAX_SCANNED_KEYS);
+    scannedKeys = new Set(saved);
+  }
+
+  try {
+    localStorage.setItem(SCANNED_KEYS_STORAGE, JSON.stringify(saved));
+  } catch (error) {
+    // A storage problem must not stop normal uploads.
+  }
 }
 
 function setStatus(text){
@@ -367,6 +403,19 @@ async function handleScan(raw){
     return;
   }
 
+  const duplicateKey = makeDuplicateKey(parsed);
+
+  if (duplicateKey && scannedKeys.has(duplicateKey)) {
+    notice(
+      "dup",
+      `此電表已掃描過，禁止重複上傳<br>` +
+      `電表號碼：${parsed.meter_no}<br>` +
+      `檢定號碼：${parsed.verify_no}`
+    );
+    isProcessing = false;
+    return;
+  }
+
   setResult(
     `上傳中...<br>` +
     `電表編碼：${meterCode}<br>` +
@@ -386,6 +435,7 @@ async function handleScan(raw){
     });
 
     if (res.status === "duplicate") {
+      rememberScannedKey(duplicateKey);
       notice(
         "dup",
         `今天已掃過<br>` +
@@ -399,6 +449,7 @@ async function handleScan(raw){
     }
 
     if (res.status === "ok") {
+      rememberScannedKey(duplicateKey);
       todayCount++;
       localStorage.setItem("tph_count_" + todayKey(), String(todayCount));
       $("#todayCount").textContent = todayCount;
