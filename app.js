@@ -14,7 +14,7 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
-const APP_VERSION = "33";
+const APP_VERSION = "34";
 const QR_SCAN_CONFIG = {
   // Reducing scan load gives the phone camera more time to autofocus.
   fps: 12,
@@ -458,11 +458,7 @@ async function startScan(){
 
   try {
     await scanner.start(
-      {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
+      { facingMode: "environment" },
       QR_SCAN_CONFIG,
       text => handleScan(text)
     );
@@ -483,7 +479,7 @@ async function startScan(){
       // iPhone Safari may not expose focus controls; scanning still works.
     }
 
-    setResult("V33 快速對焦中，請保持約 15～25 公分距離");
+    setResult("V34 相容掃描中，請保持約 15～25 公分距離");
 
   } catch(e) {
     scanner = null;
