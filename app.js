@@ -1,20 +1,15 @@
 const GAS_URL = "https://script.google.com/macros/s/AKfycbzq2ywkhggukhdVMcKaEb37mi8tFGM-DmysCOBX_cvX9MCfXp8t-yA7we-xkyVi9dQK/exec";
 
 const ACCOUNTS = {
-  A001:{password:"1234",name:"四爺"}, A002:{password:"1234",name:"古德福"},
-  A003:{password:"1234",name:"鄭福寶"}, A004:{password:"1234",name:"阿清"},
-  A005:{password:"1234",name:"雲虎"}, A006:{password:"1234",name:"鴻志"},
-  A007:{password:"1234",name:"沈定禾"}, A008:{password:"1234",name:"師傅A008"},
-  A009:{password:"1234",name:"師傅A009"}, A010:{password:"1234",name:"師傅A010"},
-  A011:{password:"1234",name:"師傅A011"}, A012:{password:"1234",name:"師傅A012"},
-  A013:{password:"1234",name:"師傅A013"}, A014:{password:"1234",name:"師傅A014"},
-  A015:{password:"1234",name:"師傅A015"}, A016:{password:"1234",name:"師傅A016"},
-  A017:{password:"1234",name:"師傅A017"}, A018:{password:"1234",name:"師傅A018"},
-  A019:{password:"1234",name:"師傅A019"}, A020:{password:"1234",name:"師傅A020"}
+  A001:"四爺", A002:"古德福", A003:"鄭福寶", A004:"阿清",
+  A005:"雲虎", A006:"鴻志", A007:"沈定禾", A008:"師傅A008",
+  A009:"師傅A009", A010:"師傅A010", A011:"師傅A011", A012:"師傅A012",
+  A013:"師傅A013", A014:"師傅A014", A015:"師傅A015", A016:"師傅A016",
+  A017:"師傅A017", A018:"師傅A018", A019:"師傅A019", A020:"師傅A020"
 };
 
 const $ = s => document.querySelector(s);
-const APP_VERSION = "35";
+const APP_VERSION = "36";
 const SCANNED_KEYS_STORAGE = "taipower_helper_scanned_keys_v35";
 const MAX_SCANNED_KEYS = 20000;
 const QR_SCAN_CONFIG = {
@@ -30,6 +25,12 @@ const QR_SCAN_CONFIG = {
   experimentalFeatures: {
     useBarCodeDetectorIfSupported: true
   }
+};
+
+const CAMERA_CONSTRAINTS = {
+  facingMode: { ideal: "environment" },
+  width: { ideal: 1280 },
+  height: { ideal: 720 }
 };
 
 let scanner = null;
@@ -225,12 +226,10 @@ if (user) showApp();
 
 $("#loginBtn").onclick = () => {
   const id = $("#username").value.trim().toUpperCase();
-  const pwd = $("#password").value.trim();
 
   if (!ACCOUNTS[id]) return alert("帳號不存在");
-  if (ACCOUNTS[id].password !== pwd) return alert("密碼錯誤");
 
-  user = { id, name: ACCOUNTS[id].name };
+  user = { id, name: ACCOUNTS[id] };
   localStorage.setItem("tph_user", JSON.stringify(user));
   showApp();
 };
@@ -509,7 +508,7 @@ async function startScan(){
 
   try {
     await scanner.start(
-      { facingMode: "environment" },
+      CAMERA_CONSTRAINTS,
       QR_SCAN_CONFIG,
       text => handleScan(text)
     );
@@ -520,17 +519,31 @@ async function startScan(){
         ? scanner.getRunningTrackCapabilities()
         : {};
 
+      const advanced = {};
+
       if (capabilities && Array.isArray(capabilities.focusMode) &&
           capabilities.focusMode.includes("continuous")) {
+        advanced.focusMode = "continuous";
+      }
+
+      // Keep the visible scan box unchanged. On phones that expose camera
+      // zoom, enlarge a distant QR code inside the camera image instead.
+      if (capabilities && capabilities.zoom) {
+        const minimumZoom = Number(capabilities.zoom.min || 1);
+        const maximumZoom = Number(capabilities.zoom.max || 1);
+        advanced.zoom = Math.min(maximumZoom, Math.max(minimumZoom, 1.5));
+      }
+
+      if (Object.keys(advanced).length) {
         await scanner.applyVideoConstraints({
-          advanced: [{ focusMode: "continuous" }]
+          advanced: [advanced]
         });
       }
     } catch (_) {
       // iPhone Safari may not expose focus controls; scanning still works.
     }
 
-    setResult("V34 相容掃描中，請保持約 15～25 公分距離");
+    setResult("V36 相容掃描中，請保持約 15～25 公分距離");
 
   } catch(e) {
     scanner = null;
