@@ -9,7 +9,7 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
-const APP_VERSION = "38";
+const APP_VERSION = "39";
 const SCANNED_KEYS_STORAGE = "taipower_helper_scanned_keys_v35";
 const MAX_SCANNED_KEYS = 20000;
 const QR_SCAN_CONFIG = {
@@ -518,9 +518,9 @@ async function handleScan(raw){
 }
 
 async function handleDecodedText(text){
-  // Keep the camera preview running. Ignore decoder callbacks while an upload
-  // is in progress or while this duplicate is waiting for manual unlock.
-  if (isProcessing || pendingDuplicateKey) return;
+  // Keep the camera preview running. Block only while a request is uploading.
+  // A duplicate warning must not prevent scanning a different meter.
+  if (isProcessing) return;
 
   setResult("已掃描 QR Code，正在上傳...");
   await handleScan(text);
@@ -591,7 +591,7 @@ async function startScan(){
       // iPhone Safari may not expose focus controls; scanning still works.
     }
 
-    setResult("V38 連續掃描中，請保持約 15～25 公分距離");
+    setResult("V39 連續掃描中，請保持約 15～25 公分距離");
 
   } catch(e) {
     try {
