@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>台電換表助手 V42</title>
-  <link rel="stylesheet" href="style.css?v=41.0">
+  <title>台電換表助手 V43</title>
+  <link rel="stylesheet" href="style.css?v=43.0">
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
 </head>
 <body>
@@ -18,7 +18,7 @@
     <h2>工程師登入</h2>
     <input id="username" placeholder="帳號，例如 A001" autocomplete="username">
     <button id="loginBtn">登入</button>
-    <p class="hint">V42：所有工程師掃描後，電表與檢定號碼只保存正確數字。</p>
+    <p class="hint">V43：縮小掃描框並提供大按鈕倍率，改善小型 QR 辨識。</p>
   </section>
 
   <section id="scanCard" class="card hidden">
@@ -32,6 +32,18 @@
 
     <h2>掃新電表 QR Code</h2>
     <div id="reader"></div>
+    <div id="cameraControls" class="camera-controls hidden">
+      <div id="zoomControl" class="zoom-control hidden">
+        <div class="camera-control-title">畫面倍率</div>
+        <div class="zoom-buttons">
+          <button type="button" class="zoom-btn hidden" data-zoom="1">1 倍</button>
+          <button type="button" class="zoom-btn hidden" data-zoom="2">2 倍</button>
+          <button type="button" class="zoom-btn hidden" data-zoom="3">3 倍</button>
+        </div>
+      </div>
+      <button id="torchBtn" type="button" class="torch-btn hidden">開啟手電筒</button>
+      <p class="camera-control-note">預設使用 2 倍；小貼紙掃不到時可試 3 倍。手機不支援的功能不會顯示。</p>
+    </div>
     <button id="startBtn">啟用相機掃描</button>
     <button id="stopBtn" class="gray">停止掃描</button>
     <div id="result" class="result">等待掃描...</div>
@@ -45,10 +57,10 @@
       <button id="unlockDuplicateBtn" type="button" class="unlock-btn">解除此電表鎖定</button>
       <p class="unlock-note">請先把「電表編碼」改正，再按此按鈕。只解除目前這一顆，其他掃描紀錄不會被清除。</p>
     </div>
-    <p class="hint">請保持約 15～25 公分距離，讓 QR Code 完整放入框內；不必貼近鏡頭。</p>
+    <p class="hint">小型 QR 建議保持約 8～15 公分，讓貼紙完整對準白框；可切換 1、2、3 倍測試。</p>
   </section>
 </main>
 
-  <script src="app.js?v=42.0"></script>
+  <script src="app.js?v=43.0"></script>
 </body>
 </html>
