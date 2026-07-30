@@ -9,7 +9,7 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
-const APP_VERSION = "36";
+const APP_VERSION = "37";
 const SCANNED_KEYS_STORAGE = "taipower_helper_scanned_keys_v35";
 const MAX_SCANNED_KEYS = 20000;
 const QR_SCAN_CONFIG = {
@@ -35,6 +35,7 @@ let lastRaw = "";
 let lastTime = 0;
 let isProcessing = false;
 let scannedKeys = loadScannedKeys();
+let pendingDuplicateKey = "";
 let todayCount = Number(localStorage.getItem("tph_count_" + todayKey()) || "0");
 
 function todayKey(){
@@ -71,6 +72,44 @@ function rememberScannedKey(key){
     localStorage.setItem(SCANNED_KEYS_STORAGE, JSON.stringify(saved));
   } catch (error) {
     // A storage problem must not stop normal uploads.
+  }
+}
+
+function forgetScannedKey(key){
+  if (!key || !scannedKeys.has(key)) return false;
+
+  scannedKeys.delete(key);
+
+  try {
+    localStorage.setItem(
+      SCANNED_KEYS_STORAGE,
+      JSON.stringify(Array.from(scannedKeys))
+    );
+  } catch (error) {
+    scannedKeys.add(key);
+    return false;
+  }
+
+  return true;
+}
+
+function showDuplicateUnlock(key){
+  pendingDuplicateKey = key || "";
+
+  const box = $("#unlockDuplicateBox");
+
+  if (box && pendingDuplicateKey) {
+    box.classList.remove("hidden");
+  }
+}
+
+function hideDuplicateUnlock(){
+  pendingDuplicateKey = "";
+
+  const box = $("#unlockDuplicateBox");
+
+  if (box) {
+    box.classList.add("hidden");
   }
 }
 
@@ -213,6 +252,7 @@ function showApp(){
 }
 
 function showLogin(){
+  hideDuplicateUnlock();
   $("#loginCard").classList.remove("hidden");
   $("#scanCard").classList.add("hidden");
   setStatus("請登入");
@@ -385,6 +425,7 @@ async function handleScan(raw){
   }
 
   setMeterCode(meterCode);
+  hideDuplicateUnlock();
 
   isProcessing = true;
   lastRaw = raw;
@@ -401,11 +442,13 @@ async function handleScan(raw){
   const duplicateKey = makeDuplicateKey(parsed);
 
   if (duplicateKey && scannedKeys.has(duplicateKey)) {
+    showDuplicateUnlock(duplicateKey);
     notice(
       "dup",
       `此電表已掃描過，禁止重複上傳<br>` +
       `電表號碼：${parsed.meter_no}<br>` +
-      `檢定號碼：${parsed.verify_no}`
+      `檢定號碼：${parsed.verify_no}<br>` +
+      `請先改正電表編碼，再按下方解除按鈕`
     );
     isProcessing = false;
     return;
@@ -489,7 +532,7 @@ async function handleDecodedText(text){
     await handleScan(text);
   } finally {
     try {
-      if (scanner && scanner.resume) {
+      if (scanner && scanner.resume && !pendingDuplicateKey) {
         scanner.resume();
       }
     } catch (_) {}
@@ -561,7 +604,7 @@ async function startScan(){
       // iPhone Safari may not expose focus controls; scanning still works.
     }
 
-    setResult("V36 相容掃描中，請保持約 15～25 公分距離");
+    setResult("V37 相容掃描中，請保持約 15～25 公分距離");
 
   } catch(e) {
     try {
@@ -589,6 +632,40 @@ async function stopScan(){
     setResult("掃描已停止");
   }
 }
+
+$("#unlockDuplicateBtn").onclick = () => {
+  const key = pendingDuplicateKey;
+
+  if (!key) {
+    hideDuplicateUnlock();
+    return;
+  }
+
+  const unlocked = forgetScannedKey(key);
+  hideDuplicateUnlock();
+  lastRaw = "";
+  lastTime = 0;
+
+  if (!unlocked) {
+    notice("err", "解除失敗<br>請重新整理後再試一次");
+    return;
+  }
+
+  notice(
+    "ok",
+    "已解除這一顆電表鎖定<br>" +
+    "其他電表紀錄沒有被清除<br>" +
+    "請重新掃描"
+  );
+
+  setTimeout(() => {
+    try {
+      if (scanner && scanner.resume) {
+        scanner.resume();
+      }
+    } catch (_) {}
+  }, 700);
+};
 
 $("#startBtn").onclick = startScan;
 $("#stopBtn").onclick = stopScan;
