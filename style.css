@@ -31,3 +31,12 @@ button{border:0;background:#0f766e;color:white;font-weight:900}
 .browser-help-text{color:#92400e;font-size:18px;font-weight:900;line-height:1.55;text-align:center}
 .chrome-btn{background:#2563eb;margin:12px 0 4px}
 .browser-help-note{margin:8px 2px 0;color:#78350f;font-size:14px;font-weight:700;line-height:1.6}
+
+.camera-controls{margin:10px 0 4px;padding:12px;border:1px solid #99f6e4;border-radius:16px;background:#f0fdfa}
+.camera-control-title{text-align:center;font-size:17px;font-weight:900;color:#115e59;margin-bottom:6px}
+.zoom-buttons{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.zoom-btn{margin:0;padding:12px 6px;background:#475569;font-size:18px}
+.zoom-btn.active{background:#0f766e;box-shadow:0 0 0 3px #5eead4 inset}
+.torch-btn{margin:10px 0 0;background:#334155}
+.torch-btn.torch-on{background:#f59e0b;color:#422006}
+.camera-control-note{margin:8px 2px 0;color:#475569;font-size:13px;font-weight:700;line-height:1.5;text-align:center}
