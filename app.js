@@ -9,7 +9,7 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
-const APP_VERSION = "40";
+const APP_VERSION = "41";
 const SCANNED_KEYS_STORAGE = "taipower_helper_scanned_keys_v35";
 const UPLOAD_QUEUE_STORAGE = "taipower_helper_upload_queue_v40";
 const MAX_SCANNED_KEYS = 20000;
@@ -122,6 +122,50 @@ function hideDuplicateUnlock(){
 
 function setStatus(text){
   $("#status").textContent = text;
+}
+
+function isAndroidDevice(){
+  return /Android/i.test(navigator.userAgent || "");
+}
+
+function isAndroidLineBrowser(){
+  const ua = navigator.userAgent || "";
+  return /Android/i.test(ua) && /Line\//i.test(ua);
+}
+
+function showExternalBrowserHelp(permissionDenied){
+  const box = $("#androidBrowserBox");
+  const text = $("#androidBrowserText");
+
+  if (!box || !isAndroidDevice()) return;
+
+  box.classList.remove("hidden");
+
+  if (text) {
+    text.textContent = permissionDenied
+      ? "安卓 LINE 已拒絕網頁相機權限，請改用 Chrome 開啟。"
+      : "安卓 LINE 可能無法開啟相機；若失敗，請按下方按鈕改用 Chrome。";
+  }
+}
+
+function hideExternalBrowserHelp(){
+  const box = $("#androidBrowserBox");
+  if (box) box.classList.add("hidden");
+}
+
+function openInChrome(){
+  const fallbackUrl = "https://tzufantw.github.io/taipower-helper/?v=41";
+  const encodedFallback = encodeURIComponent(fallbackUrl);
+  const intentUrl =
+    "intent://tzufantw.github.io/taipower-helper/?v=41" +
+    "#Intent;scheme=https;package=com.android.chrome;" +
+    "S.browser_fallback_url=" + encodedFallback + ";end";
+
+  if (isAndroidDevice()) {
+    window.location.href = intentUrl;
+  } else {
+    window.location.href = fallbackUrl;
+  }
 }
 
 function getCodeKey(){
@@ -257,6 +301,11 @@ function showApp(){
   ensureMeterCodeInput();
   updateQueueStatus();
   processUploadQueue();
+
+  if (isAndroidLineBrowser()) {
+    showExternalBrowserHelp(false);
+  }
+
   setStatus(`已登入・V${APP_VERSION}`);
 }
 
@@ -709,7 +758,8 @@ async function startScan(){
       // iPhone Safari may not expose focus controls; scanning still works.
     }
 
-    setResult("V40 連續掃描中・掃到後可立即換下一顆");
+    hideExternalBrowserHelp();
+    setResult("V41 連續掃描中・掃到後可立即換下一顆");
 
   } catch(e) {
     try {
@@ -720,12 +770,27 @@ async function startScan(){
     } catch (_) {}
 
     scanner = null;
-    notice(
-      "err",
-      "開啟相機失敗<br>" +
-      "請允許相機權限後重新整理<br>" +
-      `<small>${e && e.message ? e.message : String(e || "")}</small>`
-    );
+
+    const errorText = e && e.message ? e.message : String(e || "");
+    const permissionDenied =
+      (e && e.name === "NotAllowedError") ||
+      /NotAllowedError|Permission denied|permission/i.test(errorText);
+
+    if (isAndroidDevice() && permissionDenied) {
+      showExternalBrowserHelp(true);
+      notice(
+        "err",
+        "安卓 LINE 無法取得相機權限<br>" +
+        "請按下方「使用 Chrome 開啟」"
+      );
+    } else {
+      notice(
+        "err",
+        "開啟相機失敗<br>" +
+        "請允許相機權限後重新整理<br>" +
+        `<small>${errorText}</small>`
+      );
+    }
   }
 }
 
@@ -772,6 +837,7 @@ $("#unlockDuplicateBtn").onclick = () => {
 
 $("#startBtn").onclick = startScan;
 $("#stopBtn").onclick = stopScan;
+$("#openChromeBtn").onclick = openInChrome;
 
 window.addEventListener("online", processUploadQueue);
 document.addEventListener("visibilitychange", () => {
