@@ -9,9 +9,12 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
-const APP_VERSION = "39";
+const APP_VERSION = "40";
 const SCANNED_KEYS_STORAGE = "taipower_helper_scanned_keys_v35";
+const UPLOAD_QUEUE_STORAGE = "taipower_helper_upload_queue_v40";
 const MAX_SCANNED_KEYS = 20000;
+const MAX_UPLOAD_QUEUE = 5000;
+const UPLOAD_RETRY_DELAY = 5000;
 const QR_SCAN_CONFIG = {
   // Reducing scan load gives the phone camera more time to autofocus.
   fps: 12,
@@ -34,6 +37,10 @@ let user = JSON.parse(localStorage.getItem("tph_user") || "null");
 let lastRaw = "";
 let lastTime = 0;
 let isProcessing = false;
+let uploadQueue = loadUploadQueue();
+let isUploading = false;
+let uploadRetryTimer = null;
+let lastUploadError = "";
 let scannedKeys = loadScannedKeys();
 let pendingDuplicateKey = "";
 let todayCount = Number(localStorage.getItem("tph_count_" + todayKey()) || "0");
@@ -248,6 +255,8 @@ function showApp(){
   $("#engineerName").textContent = `${user.name}（${user.id}）`;
   $("#todayCount").textContent = todayCount;
   ensureMeterCodeInput();
+  updateQueueStatus();
+  processUploadQueue();
   setStatus(`已登入・V${APP_VERSION}`);
 }
 
@@ -406,123 +415,232 @@ function jsonp(params){
   });
 }
 
-async function handleScan(raw){
-  const now = Date.now();
 
-  if (isProcessing) return;
+function loadUploadQueue(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(UPLOAD_QUEUE_STORAGE) || "[]");
 
-  if (raw === lastRaw && now - lastTime < 3000) return;
+    if (!Array.isArray(saved)) return [];
 
-  const meterCode = getMeterCode();
+    return saved.filter(item =>
+      item &&
+      item.account &&
+      item.name &&
+      item.meter_code &&
+      item.meter_no &&
+      item.verify_no &&
+      item.qr_raw
+    ).slice(0, MAX_UPLOAD_QUEUE);
+  } catch (error) {
+    return [];
+  }
+}
 
-  if (!meterCode) {
-    notice("err", "請先輸入電表編碼<br>例如：0001");
+function saveUploadQueue(){
+  try {
+    localStorage.setItem(UPLOAD_QUEUE_STORAGE, JSON.stringify(uploadQueue));
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
 
-    const input = getMeterCodeInput();
-    if (input) input.focus();
+function queueHasDuplicateKey(key){
+  return Boolean(key) && uploadQueue.some(item => item.duplicate_key === key);
+}
 
+function updateQueueStatus(){
+  const el = $("#queueStatus");
+
+  if (!el) return;
+
+  const count = uploadQueue.length;
+
+  if (isUploading && count) {
+    el.className = "queue-status uploading";
+    el.textContent = `背景上傳中・待上傳 ${count} 筆`;
+  } else if (lastUploadError && count) {
+    el.className = "queue-status error";
+    el.textContent = `網路暫時失敗・保留 ${count} 筆，將自動重試`;
+  } else if (count) {
+    el.className = "queue-status pending";
+    el.textContent = `待上傳 ${count} 筆`;
+  } else {
+    el.className = "queue-status complete";
+    el.textContent = "待上傳 0 筆・全部完成";
+  }
+}
+
+function scheduleUploadRetry(){
+  clearTimeout(uploadRetryTimer);
+  uploadRetryTimer = setTimeout(() => {
+    uploadRetryTimer = null;
+    processUploadQueue();
+  }, UPLOAD_RETRY_DELAY);
+}
+
+async function processUploadQueue(){
+  if (isUploading || !uploadQueue.length) {
+    updateQueueStatus();
     return;
   }
 
-  setMeterCode(meterCode);
-  hideDuplicateUnlock();
+  clearTimeout(uploadRetryTimer);
+  uploadRetryTimer = null;
+  isUploading = true;
+  lastUploadError = "";
+  updateQueueStatus();
 
-  isProcessing = true;
-  lastRaw = raw;
-  lastTime = now;
-
-  const parsed = parseQR(raw);
-
-  if (!parsed) {
-    notice("err", "QR 解析失敗<br>請重新掃描");
-    isProcessing = false;
-    return;
-  }
-
-  const duplicateKey = makeDuplicateKey(parsed);
-
-  if (duplicateKey && scannedKeys.has(duplicateKey)) {
-    showDuplicateUnlock(duplicateKey);
-    notice(
-      "dup",
-      `此電表已掃描過，禁止重複上傳<br>` +
-      `電表號碼：${parsed.meter_no}<br>` +
-      `檢定號碼：${parsed.verify_no}<br>` +
-      `請先改正電表編碼，再按下方解除按鈕`
-    );
-    isProcessing = false;
-    return;
-  }
-
-  setResult(
-    `上傳中...<br>` +
-    `電表編碼：${meterCode}<br>` +
-    `電表號碼：${parsed.meter_no}<br>` +
-    `檢定號碼：${parsed.verify_no}`
-  );
+  const item = uploadQueue[0];
 
   try {
     const res = await jsonp({
       action: "uploadSimple",
+      account: item.account,
+      name: item.name,
+      meter_code: item.meter_code,
+      meter_no: item.meter_no,
+      verify_no: item.verify_no,
+      qr_raw: item.qr_raw
+    });
+
+    if (!res || (res.status !== "ok" && res.status !== "duplicate")) {
+      throw new Error(res && res.message ? res.message : "未知錯誤");
+    }
+
+    uploadQueue.shift();
+    saveUploadQueue();
+    rememberScannedKey(item.duplicate_key);
+
+    if (res.status === "ok" && item.day_key === todayKey()) {
+      todayCount++;
+      localStorage.setItem("tph_count_" + todayKey(), String(todayCount));
+
+      const countEl = $("#todayCount");
+      if (countEl) countEl.textContent = todayCount;
+    }
+
+    lastUploadError = "";
+
+  } catch (error) {
+    item.attempts = Number(item.attempts || 0) + 1;
+    item.last_error = error && error.message ? error.message : String(error || "上傳失敗");
+    saveUploadQueue();
+    lastUploadError = item.last_error;
+  } finally {
+    isUploading = false;
+    updateQueueStatus();
+
+    if (lastUploadError) {
+      scheduleUploadRetry();
+    } else if (uploadQueue.length) {
+      setTimeout(processUploadQueue, 0);
+    }
+  }
+}
+
+async function handleScan(raw){
+  const now = Date.now();
+
+  if (isProcessing) return;
+  if (raw === lastRaw && now - lastTime < 5000) return;
+
+  isProcessing = true;
+
+  try {
+    const meterCode = getMeterCode();
+
+    if (!meterCode) {
+      notice("err", "請先輸入電表編碼<br>例如：0001");
+
+      const input = getMeterCodeInput();
+      if (input) input.focus();
+
+      return;
+    }
+
+    setMeterCode(meterCode);
+    hideDuplicateUnlock();
+    lastRaw = raw;
+    lastTime = now;
+
+    const parsed = parseQR(raw);
+
+    if (!parsed) {
+      notice("err", "QR 解析失敗<br>請重新掃描");
+      return;
+    }
+
+    const duplicateKey = makeDuplicateKey(parsed);
+
+    if (duplicateKey && scannedKeys.has(duplicateKey)) {
+      showDuplicateUnlock(duplicateKey);
+
+      const queuedText = queueHasDuplicateKey(duplicateKey)
+        ? "這筆已在待上傳隊列中"
+        : "此電表已掃描過，禁止重複上傳";
+
+      notice(
+        "dup",
+        `${queuedText}<br>` +
+        `電表號碼：${parsed.meter_no}<br>` +
+        `檢定號碼：${parsed.verify_no}<br>` +
+        `換另一顆新表可直接繼續掃描`
+      );
+      return;
+    }
+
+    if (uploadQueue.length >= MAX_UPLOAD_QUEUE) {
+      notice("err", "待上傳資料已達上限<br>請連線完成上傳後再掃描");
+      return;
+    }
+
+    const item = {
+      id: Date.now() + "_" + Math.floor(Math.random() * 999999),
       account: user.id,
       name: user.name,
       meter_code: meterCode,
       meter_no: parsed.meter_no,
       verify_no: parsed.verify_no,
-      qr_raw: parsed.qr_raw
-    });
+      qr_raw: parsed.qr_raw,
+      duplicate_key: duplicateKey,
+      day_key: todayKey(),
+      created_at: new Date().toISOString(),
+      attempts: 0
+    };
 
-    if (res.status === "duplicate") {
-      rememberScannedKey(duplicateKey);
-      notice(
-        "dup",
-        `今天已掃過<br>` +
-        `電表編碼：${meterCode}<br>` +
-        `電表號碼：${parsed.meter_no}<br>` +
-        `檢定號碼：${parsed.verify_no}`
-      );
+    uploadQueue.push(item);
 
-      isProcessing = false;
+    if (!saveUploadQueue()) {
+      uploadQueue.pop();
+      notice("err", "手機儲存空間不足<br>本筆尚未加入，請勿換表");
+      updateQueueStatus();
       return;
     }
 
-    if (res.status === "ok") {
-      rememberScannedKey(duplicateKey);
-      todayCount++;
-      localStorage.setItem("tph_count_" + todayKey(), String(todayCount));
-      $("#todayCount").textContent = todayCount;
+    rememberScannedKey(duplicateKey);
 
-      const nextCode = plusOneCode(meterCode);
-      setMeterCode(nextCode);
+    const nextCode = plusOneCode(meterCode);
+    setMeterCode(nextCode);
+    updateQueueStatus();
 
-      notice(
-        "ok",
-        `上傳成功<br>` +
-        `本筆編碼：${meterCode}<br>` +
-        `下一筆編碼：${nextCode}<br>` +
-        `電表號碼：${parsed.meter_no}<br>` +
-        `檢定號碼：${parsed.verify_no}`
-      );
+    notice(
+      "ok",
+      `已收件・請掃下一顆<br>` +
+      `本筆編碼：${meterCode}<br>` +
+      `下一筆編碼：${nextCode}<br>` +
+      `待上傳：${uploadQueue.length} 筆`
+    );
 
-      isProcessing = false;
-      return;
-    }
+    processUploadQueue();
 
-    notice("err", "上傳失敗<br>" + (res.message || "未知錯誤"));
-    isProcessing = false;
-
-  } catch(e) {
-    notice("err", "上傳失敗<br>" + e.message);
+  } finally {
     isProcessing = false;
   }
 }
 
 async function handleDecodedText(text){
-  // Keep the camera preview running. Block only while a request is uploading.
-  // A duplicate warning must not prevent scanning a different meter.
   if (isProcessing) return;
-
-  setResult("已掃描 QR Code，正在上傳...");
   await handleScan(text);
 }
 
@@ -591,7 +709,7 @@ async function startScan(){
       // iPhone Safari may not expose focus controls; scanning still works.
     }
 
-    setResult("V39 連續掃描中，請保持約 15～25 公分距離");
+    setResult("V40 連續掃描中・掃到後可立即換下一顆");
 
   } catch(e) {
     try {
@@ -628,6 +746,11 @@ $("#unlockDuplicateBtn").onclick = () => {
     return;
   }
 
+  if (queueHasDuplicateKey(key)) {
+    notice("err", "這筆仍在待上傳隊列中<br>完成上傳前不能解除");
+    return;
+  }
+
   const unlocked = forgetScannedKey(key);
   hideDuplicateUnlock();
   lastRaw = "";
@@ -649,3 +772,10 @@ $("#unlockDuplicateBtn").onclick = () => {
 
 $("#startBtn").onclick = startScan;
 $("#stopBtn").onclick = stopScan;
+
+window.addEventListener("online", processUploadQueue);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) processUploadQueue();
+});
+updateQueueStatus();
+processUploadQueue();
