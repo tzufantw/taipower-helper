@@ -9,7 +9,7 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
-const APP_VERSION = "41";
+const APP_VERSION = "42";
 const SCANNED_KEYS_STORAGE = "taipower_helper_scanned_keys_v35";
 const UPLOAD_QUEUE_STORAGE = "taipower_helper_upload_queue_v40";
 const MAX_SCANNED_KEYS = 20000;
@@ -154,10 +154,10 @@ function hideExternalBrowserHelp(){
 }
 
 function openInChrome(){
-  const fallbackUrl = "https://tzufantw.github.io/taipower-helper/?v=41";
+  const fallbackUrl = "https://tzufantw.github.io/taipower-helper/?v=42";
   const encodedFallback = encodeURIComponent(fallbackUrl);
   const intentUrl =
-    "intent://tzufantw.github.io/taipower-helper/?v=41" +
+    "intent://tzufantw.github.io/taipower-helper/?v=42" +
     "#Intent;scheme=https;package=com.android.chrome;" +
     "S.browser_fallback_url=" + encodedFallback + ";end";
 
@@ -403,18 +403,27 @@ function notice(type, html){
   setResult(html);
 }
 
+function extractQRNumber(value){
+  const matches = String(value || "").match(/\d{5,12}/g) || [];
+  return matches.length ? matches[matches.length - 1] : "";
+}
+
 function parseQR(raw){
   raw = String(raw || "").trim();
 
-  const clean = raw.replace(/^L[o0]LA/i, "");
-  const parts = clean.split(";").map(x => x.trim()).filter(Boolean);
+  const parts = raw.split(";").map(x => x.trim()).filter(Boolean);
 
   if (parts.length >= 2) {
-    return {
-      verify_no: parts[0],
-      meter_no: parts[1],
-      qr_raw: raw
-    };
+    const verifyNo = extractQRNumber(parts[0]);
+    const meterNo = extractQRNumber(parts[1]);
+
+    if (verifyNo && meterNo) {
+      return {
+        verify_no: verifyNo,
+        meter_no: meterNo,
+        qr_raw: raw
+      };
+    }
   }
 
   const nums = raw.match(/\d{5,12}/g) || [];
@@ -759,7 +768,7 @@ async function startScan(){
     }
 
     hideExternalBrowserHelp();
-    setResult("V41 連續掃描中・掃到後可立即換下一顆");
+    setResult("V42 純數字掃描中・掃到後可立即換下一顆");
 
   } catch(e) {
     try {
