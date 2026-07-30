@@ -30,11 +30,7 @@ const QR_SCAN_CONFIG = {
   }
 };
 
-const CAMERA_START_CONFIG = {
-  facingMode: { ideal: "environment" },
-  width: { ideal: 1920 },
-  height: { ideal: 1080 }
-};
+const CAMERA_START_CONFIG = { facingMode: "environment" };
 
 let scanner = null;
 let torchEnabled = false;
