@@ -26,3 +26,8 @@ button{border:0;background:#0f766e;color:white;font-weight:900}
 .queue-status.uploading{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd}
 .queue-status.pending{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
 .queue-status.error{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+
+.browser-help{margin-top:12px;padding:14px;border:2px solid #f59e0b;border-radius:16px;background:#fffbeb}
+.browser-help-text{color:#92400e;font-size:18px;font-weight:900;line-height:1.55;text-align:center}
+.chrome-btn{background:#2563eb;margin:12px 0 4px}
+.browser-help-note{margin:8px 2px 0;color:#78350f;font-size:14px;font-weight:700;line-height:1.6}
