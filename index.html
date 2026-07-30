@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>台電換表助手 V40</title>
-  <link rel="stylesheet" href="style.css?v=40.0">
+  <title>台電換表助手 V41</title>
+  <link rel="stylesheet" href="style.css?v=41.0">
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
 </head>
 <body>
@@ -18,7 +18,7 @@
     <h2>工程師登入</h2>
     <input id="username" placeholder="帳號，例如 A001" autocomplete="username">
     <button id="loginBtn">登入</button>
-    <p class="hint">V40：掃碼先存手機並在背景依序上傳，可立即掃下一顆。</p>
+    <p class="hint">V41：支援安卓 LINE 相機失敗時快速改用 Chrome。</p>
   </section>
 
   <section id="scanCard" class="card hidden">
@@ -36,6 +36,11 @@
     <button id="stopBtn" class="gray">停止掃描</button>
     <div id="result" class="result">等待掃描...</div>
     <div id="queueStatus" class="queue-status complete">待上傳 0 筆・全部完成</div>
+    <div id="androidBrowserBox" class="browser-help hidden">
+      <div id="androidBrowserText" class="browser-help-text">安卓 LINE 可能無法開啟相機，請改用 Chrome。</div>
+      <button id="openChromeBtn" type="button" class="chrome-btn">使用 Chrome 開啟</button>
+      <p class="browser-help-note">若按鈕沒有反應，請點 LINE 畫面右下角「⋮」，再選「使用其他應用程式開啟」。</p>
+    </div>
     <div id="unlockDuplicateBox" class="unlock-box hidden">
       <button id="unlockDuplicateBtn" type="button" class="unlock-btn">解除此電表鎖定</button>
       <p class="unlock-note">請先把「電表編碼」改正，再按此按鈕。只解除目前這一顆，其他掃描紀錄不會被清除。</p>
@@ -44,6 +49,6 @@
   </section>
 </main>
 
-  <script src="app.js?v=40.0"></script>
+  <script src="app.js?v=41.0"></script>
 </body>
 </html>
