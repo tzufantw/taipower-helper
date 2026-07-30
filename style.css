@@ -16,4 +16,7 @@ button{border:0;background:#0f766e;color:white;font-weight:900}
 .centerMsg.ok{background:#dcfce7;color:#166534;border:3px solid #22c55e}
 .centerMsg.dup{background:#fef3c7;color:#92400e;border:3px solid #f59e0b}
 .centerMsg.err{background:#fee2e2;color:#991b1b;border:3px solid #ef4444}
+.unlock-box{margin-top:12px;padding:12px;border:2px solid #f59e0b;border-radius:16px;background:#fffbeb}
+.unlock-btn{background:#dc2626;margin:0}
+.unlock-note{margin:8px 2px 0;color:#92400e;font-size:15px;font-weight:700;line-height:1.6}
 @media(max-width:640px){.card{margin:10px;padding:16px}.top{align-items:flex-start}.small{width:110px}h1{font-size:20px}}
