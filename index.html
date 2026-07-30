@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>台電換表助手 V36</title>
-  <link rel="stylesheet" href="style.css">
+  <title>台電換表助手 V37</title>
+  <link rel="stylesheet" href="style.css?v=37.0">
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
 </head>
 <body>
@@ -18,7 +18,7 @@
     <h2>工程師登入</h2>
     <input id="username" placeholder="帳號，例如 A001" autocomplete="username">
     <button id="loginBtn">登入</button>
-    <p class="hint">V36 測試版：輸入帳號 A001～A020 即可登入。</p>
+    <p class="hint">V37：輸入帳號 A001～A020 即可登入。</p>
   </section>
 
   <section id="scanCard" class="card hidden">
@@ -35,10 +35,14 @@
     <button id="startBtn">啟用相機掃描</button>
     <button id="stopBtn" class="gray">停止掃描</button>
     <div id="result" class="result">等待掃描...</div>
+    <div id="unlockDuplicateBox" class="unlock-box hidden">
+      <button id="unlockDuplicateBtn" type="button" class="unlock-btn">解除此電表鎖定</button>
+      <p class="unlock-note">請先把「電表編碼」改正，再按此按鈕。只解除目前這一顆，其他掃描紀錄不會被清除。</p>
+    </div>
     <p class="hint">請保持約 15～25 公分距離，讓 QR Code 完整放入框內；不必貼近鏡頭。</p>
   </section>
 </main>
 
-  <script src="app.js?v=36.2"></script>
+  <script src="app.js?v=37.0"></script>
 </body>
 </html>
