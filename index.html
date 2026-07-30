@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>台電換表助手 V39</title>
-  <link rel="stylesheet" href="style.css?v=37.0">
+  <title>台電換表助手 V40</title>
+  <link rel="stylesheet" href="style.css?v=40.0">
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
 </head>
 <body>
@@ -18,7 +18,7 @@
     <h2>工程師登入</h2>
     <input id="username" placeholder="帳號，例如 A001" autocomplete="username">
     <button id="loginBtn">登入</button>
-    <p class="hint">V39：換新電表可直接繼續掃描，輸入帳號 A001～A020 即可登入。</p>
+    <p class="hint">V40：掃碼先存手機並在背景依序上傳，可立即掃下一顆。</p>
   </section>
 
   <section id="scanCard" class="card hidden">
@@ -35,6 +35,7 @@
     <button id="startBtn">啟用相機掃描</button>
     <button id="stopBtn" class="gray">停止掃描</button>
     <div id="result" class="result">等待掃描...</div>
+    <div id="queueStatus" class="queue-status complete">待上傳 0 筆・全部完成</div>
     <div id="unlockDuplicateBox" class="unlock-box hidden">
       <button id="unlockDuplicateBtn" type="button" class="unlock-btn">解除此電表鎖定</button>
       <p class="unlock-note">請先把「電表編碼」改正，再按此按鈕。只解除目前這一顆，其他掃描紀錄不會被清除。</p>
@@ -43,6 +44,6 @@
   </section>
 </main>
 
-  <script src="app.js?v=39.0"></script>
+  <script src="app.js?v=40.0"></script>
 </body>
 </html>
