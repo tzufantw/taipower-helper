@@ -183,8 +183,14 @@ function resetCameraControls(){
   if (controls) controls.classList.add("hidden");
   if (zoomControl) zoomControl.classList.add("hidden");
 
+  document.querySelectorAll(".zoom-btn").forEach(button => {
+    button.classList.add("hidden");
+    button.classList.remove("active");
+  });
+
   if (torchBtn) {
     torchBtn.classList.add("hidden");
+    torchBtn.classList.remove("torch-on");
     torchBtn.textContent = "開啟手電筒";
   }
 }
@@ -197,29 +203,34 @@ async function configureCameraControls(){
   const capabilities = scanner.getRunningTrackCapabilities() || {};
   const controls = $("#cameraControls");
   const zoomControl = $("#zoomControl");
-  const zoomSlider = $("#zoomSlider");
-  const zoomValue = $("#zoomValue");
   const torchBtn = $("#torchBtn");
   const advanced = {};
+  let hasZoomButtons = false;
 
   if (Array.isArray(capabilities.focusMode) &&
       capabilities.focusMode.includes("continuous")) {
     advanced.focusMode = "continuous";
   }
 
-  if (capabilities.zoom && zoomSlider && zoomValue && zoomControl) {
+  if (capabilities.zoom && zoomControl) {
     const minimumZoom = Number(capabilities.zoom.min || 1);
     const maximumZoom = Number(capabilities.zoom.max || 1);
-    const zoomStep = Number(capabilities.zoom.step || 0.1);
     const initialZoom = Math.min(maximumZoom, Math.max(minimumZoom, 2));
 
-    zoomSlider.min = String(minimumZoom);
-    zoomSlider.max = String(maximumZoom);
-    zoomSlider.step = String(zoomStep);
-    zoomSlider.value = String(initialZoom);
-    zoomSlider.disabled = false;
-    zoomValue.textContent = initialZoom.toFixed(1) + " 倍";
-    zoomControl.classList.remove("hidden");
+    document.querySelectorAll(".zoom-btn").forEach(button => {
+      const targetZoom = Number(button.dataset.zoom);
+      const supported = targetZoom >= minimumZoom && targetZoom <= maximumZoom;
+
+      button.classList.toggle("hidden", !supported);
+      button.classList.toggle("active", supported && Math.abs(targetZoom - initialZoom) < 0.05);
+
+      if (supported) hasZoomButtons = true;
+    });
+
+    if (hasZoomButtons) {
+      zoomControl.classList.remove("hidden");
+    }
+
     advanced.zoom = initialZoom;
   }
 
@@ -228,8 +239,7 @@ async function configureCameraControls(){
   }
 
   if (controls &&
-      ((!zoomControl || !zoomControl.classList.contains("hidden")) ||
-       (torchBtn && !torchBtn.classList.contains("hidden")))) {
+      (hasZoomButtons || (torchBtn && !torchBtn.classList.contains("hidden")))) {
     controls.classList.remove("hidden");
   }
 
@@ -246,7 +256,16 @@ async function applyCameraZoom(value){
 
   try {
     await scanner.applyVideoConstraints({ advanced: [{ zoom }] });
-  } catch (_) {}
+
+    document.querySelectorAll(".zoom-btn").forEach(button => {
+      button.classList.toggle(
+        "active",
+        Math.abs(Number(button.dataset.zoom) - zoom) < 0.05
+      );
+    });
+  } catch (_) {
+    notice("err", "這支手機或瀏覽器無法調整倍率");
+  }
 }
 
 async function toggleTorch(){
@@ -928,17 +947,13 @@ $("#unlockDuplicateBtn").onclick = () => {
 $("#startBtn").onclick = startScan;
 $("#stopBtn").onclick = stopScan;
 $("#openChromeBtn").onclick = openInChrome;
-$("#torchBtn").onclick = toggleTorch;
 
-$("#zoomSlider").oninput = event => {
-  const value = Number(event.target.value);
-  const label = $("#zoomValue");
-  if (label) label.textContent = value.toFixed(1) + " 倍";
-};
+const torchButton = $("#torchBtn");
+if (torchButton) torchButton.onclick = toggleTorch;
 
-$("#zoomSlider").onchange = event => {
-  applyCameraZoom(event.target.value);
-};
+document.querySelectorAll(".zoom-btn").forEach(button => {
+  button.onclick = () => applyCameraZoom(button.dataset.zoom);
+});
 
 window.addEventListener("online", processUploadQueue);
 document.addEventListener("visibilitychange", () => {
