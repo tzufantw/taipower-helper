@@ -9,7 +9,7 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
-const APP_VERSION = "42";
+const APP_VERSION = "43";
 const SCANNED_KEYS_STORAGE = "taipower_helper_scanned_keys_v35";
 const UPLOAD_QUEUE_STORAGE = "taipower_helper_upload_queue_v40";
 const MAX_SCANNED_KEYS = 20000;
@@ -20,7 +20,7 @@ const QR_SCAN_CONFIG = {
   fps: 12,
   qrbox: (viewfinderWidth, viewfinderHeight) => {
     const shortestSide = Math.min(viewfinderWidth, viewfinderHeight);
-    const size = Math.max(210, Math.min(330, Math.floor(shortestSide * 0.68)));
+    const size = Math.max(170, Math.min(270, Math.floor(shortestSide * 0.54)));
     return { width: size, height: size };
   },
   aspectRatio: 4 / 3,
@@ -30,9 +30,14 @@ const QR_SCAN_CONFIG = {
   }
 };
 
-const CAMERA_START_CONFIG = { facingMode: "environment" };
+const CAMERA_START_CONFIG = {
+  facingMode: { ideal: "environment" },
+  width: { ideal: 1920 },
+  height: { ideal: 1080 }
+};
 
 let scanner = null;
+let torchEnabled = false;
 let user = JSON.parse(localStorage.getItem("tph_user") || "null");
 let lastRaw = "";
 let lastTime = 0;
@@ -154,10 +159,10 @@ function hideExternalBrowserHelp(){
 }
 
 function openInChrome(){
-  const fallbackUrl = "https://tzufantw.github.io/taipower-helper/?v=42";
+  const fallbackUrl = "https://tzufantw.github.io/taipower-helper/?v=43";
   const encodedFallback = encodeURIComponent(fallbackUrl);
   const intentUrl =
-    "intent://tzufantw.github.io/taipower-helper/?v=42" +
+    "intent://tzufantw.github.io/taipower-helper/?v=43" +
     "#Intent;scheme=https;package=com.android.chrome;" +
     "S.browser_fallback_url=" + encodedFallback + ";end";
 
@@ -165,6 +170,104 @@ function openInChrome(){
     window.location.href = intentUrl;
   } else {
     window.location.href = fallbackUrl;
+  }
+}
+
+function resetCameraControls(){
+  torchEnabled = false;
+
+  const controls = $("#cameraControls");
+  const zoomControl = $("#zoomControl");
+  const torchBtn = $("#torchBtn");
+
+  if (controls) controls.classList.add("hidden");
+  if (zoomControl) zoomControl.classList.add("hidden");
+
+  if (torchBtn) {
+    torchBtn.classList.add("hidden");
+    torchBtn.textContent = "開啟手電筒";
+  }
+}
+
+async function configureCameraControls(){
+  resetCameraControls();
+
+  if (!scanner || !scanner.getRunningTrackCapabilities) return;
+
+  const capabilities = scanner.getRunningTrackCapabilities() || {};
+  const controls = $("#cameraControls");
+  const zoomControl = $("#zoomControl");
+  const zoomSlider = $("#zoomSlider");
+  const zoomValue = $("#zoomValue");
+  const torchBtn = $("#torchBtn");
+  const advanced = {};
+
+  if (Array.isArray(capabilities.focusMode) &&
+      capabilities.focusMode.includes("continuous")) {
+    advanced.focusMode = "continuous";
+  }
+
+  if (capabilities.zoom && zoomSlider && zoomValue && zoomControl) {
+    const minimumZoom = Number(capabilities.zoom.min || 1);
+    const maximumZoom = Number(capabilities.zoom.max || 1);
+    const zoomStep = Number(capabilities.zoom.step || 0.1);
+    const initialZoom = Math.min(maximumZoom, Math.max(minimumZoom, 2));
+
+    zoomSlider.min = String(minimumZoom);
+    zoomSlider.max = String(maximumZoom);
+    zoomSlider.step = String(zoomStep);
+    zoomSlider.value = String(initialZoom);
+    zoomSlider.disabled = false;
+    zoomValue.textContent = initialZoom.toFixed(1) + " 倍";
+    zoomControl.classList.remove("hidden");
+    advanced.zoom = initialZoom;
+  }
+
+  if (capabilities.torch === true && torchBtn) {
+    torchBtn.classList.remove("hidden");
+  }
+
+  if (controls &&
+      ((!zoomControl || !zoomControl.classList.contains("hidden")) ||
+       (torchBtn && !torchBtn.classList.contains("hidden")))) {
+    controls.classList.remove("hidden");
+  }
+
+  if (Object.keys(advanced).length) {
+    await scanner.applyVideoConstraints({ advanced: [advanced] });
+  }
+}
+
+async function applyCameraZoom(value){
+  if (!scanner || !scanner.applyVideoConstraints) return;
+
+  const zoom = Number(value);
+  if (!Number.isFinite(zoom)) return;
+
+  try {
+    await scanner.applyVideoConstraints({ advanced: [{ zoom }] });
+  } catch (_) {}
+}
+
+async function toggleTorch(){
+  if (!scanner || !scanner.applyVideoConstraints) return;
+
+  const nextValue = !torchEnabled;
+
+  try {
+    await scanner.applyVideoConstraints({
+      advanced: [{ torch: nextValue }]
+    });
+
+    torchEnabled = nextValue;
+
+    const button = $("#torchBtn");
+    if (button) {
+      button.textContent = torchEnabled ? "關閉手電筒" : "開啟手電筒";
+      button.classList.toggle("torch-on", torchEnabled);
+    }
+  } catch (_) {
+    notice("err", "這支手機或瀏覽器無法控制手電筒");
   }
 }
 
@@ -737,38 +840,14 @@ async function startScan(){
       text => handleDecodedText(text)
     );
 
-    // Use continuous autofocus where the mobile browser exposes it.
     try {
-      const capabilities = scanner.getRunningTrackCapabilities
-        ? scanner.getRunningTrackCapabilities()
-        : {};
-
-      const advanced = {};
-
-      if (capabilities && Array.isArray(capabilities.focusMode) &&
-          capabilities.focusMode.includes("continuous")) {
-        advanced.focusMode = "continuous";
-      }
-
-      // Keep the visible scan box unchanged. On phones that expose camera
-      // zoom, enlarge a distant QR code inside the camera image instead.
-      if (capabilities && capabilities.zoom) {
-        const minimumZoom = Number(capabilities.zoom.min || 1);
-        const maximumZoom = Number(capabilities.zoom.max || 1);
-        advanced.zoom = Math.min(maximumZoom, Math.max(minimumZoom, 1.5));
-      }
-
-      if (Object.keys(advanced).length) {
-        await scanner.applyVideoConstraints({
-          advanced: [advanced]
-        });
-      }
+      await configureCameraControls();
     } catch (_) {
-      // iPhone Safari may not expose focus controls; scanning still works.
+      resetCameraControls();
     }
 
     hideExternalBrowserHelp();
-    setResult("V42 純數字掃描中・掃到後可立即換下一顆");
+    setResult("V43 小型 QR 掃描中・請讓貼紙對準縮小後的白框");
 
   } catch(e) {
     try {
@@ -779,6 +858,7 @@ async function startScan(){
     } catch (_) {}
 
     scanner = null;
+    resetCameraControls();
 
     const errorText = e && e.message ? e.message : String(e || "");
     const permissionDenied =
@@ -808,6 +888,7 @@ async function stopScan(){
     await scanner.stop().catch(() => {});
     scanner.clear();
     scanner = null;
+    resetCameraControls();
     setResult("掃描已停止");
   }
 }
@@ -847,6 +928,17 @@ $("#unlockDuplicateBtn").onclick = () => {
 $("#startBtn").onclick = startScan;
 $("#stopBtn").onclick = stopScan;
 $("#openChromeBtn").onclick = openInChrome;
+$("#torchBtn").onclick = toggleTorch;
+
+$("#zoomSlider").oninput = event => {
+  const value = Number(event.target.value);
+  const label = $("#zoomValue");
+  if (label) label.textContent = value.toFixed(1) + " 倍";
+};
+
+$("#zoomSlider").onchange = event => {
+  applyCameraZoom(event.target.value);
+};
 
 window.addEventListener("online", processUploadQueue);
 document.addEventListener("visibilitychange", () => {
