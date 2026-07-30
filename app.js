@@ -9,7 +9,7 @@ const ACCOUNTS = {
 };
 
 const $ = s => document.querySelector(s);
-const APP_VERSION = "37";
+const APP_VERSION = "38";
 const SCANNED_KEYS_STORAGE = "taipower_helper_scanned_keys_v35";
 const MAX_SCANNED_KEYS = 20000;
 const QR_SCAN_CONFIG = {
@@ -518,25 +518,12 @@ async function handleScan(raw){
 }
 
 async function handleDecodedText(text){
-  if (isProcessing) return;
-
-  try {
-    if (scanner && scanner.pause) {
-      scanner.pause(true);
-    }
-  } catch (_) {}
+  // Keep the camera preview running. Ignore decoder callbacks while an upload
+  // is in progress or while this duplicate is waiting for manual unlock.
+  if (isProcessing || pendingDuplicateKey) return;
 
   setResult("已掃描 QR Code，正在上傳...");
-
-  try {
-    await handleScan(text);
-  } finally {
-    try {
-      if (scanner && scanner.resume && !pendingDuplicateKey) {
-        scanner.resume();
-      }
-    } catch (_) {}
-  }
+  await handleScan(text);
 }
 
 async function startScan(){
@@ -604,7 +591,7 @@ async function startScan(){
       // iPhone Safari may not expose focus controls; scanning still works.
     }
 
-    setResult("V37 相容掃描中，請保持約 15～25 公分距離");
+    setResult("V38 連續掃描中，請保持約 15～25 公分距離");
 
   } catch(e) {
     try {
@@ -658,13 +645,6 @@ $("#unlockDuplicateBtn").onclick = () => {
     "請重新掃描"
   );
 
-  setTimeout(() => {
-    try {
-      if (scanner && scanner.resume) {
-        scanner.resume();
-      }
-    } catch (_) {}
-  }, 700);
 };
 
 $("#startBtn").onclick = startScan;
